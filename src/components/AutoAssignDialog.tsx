@@ -50,6 +50,7 @@ export default function AutoAssignDialog({
 
   const [preview, setPreview] = useState<Employee[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [stats, setStats] = useState<AutoAssignStats | null>(null);
 
   const toggleShift = (code: string) => {
     setSelectedShifts(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
