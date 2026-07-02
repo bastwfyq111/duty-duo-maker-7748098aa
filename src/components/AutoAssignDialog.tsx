@@ -240,8 +240,21 @@ export default function AutoAssignDialog({
           )}
 
           {preview && (
-            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground">
-              ✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.
+            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground space-y-1.5">
+              <div>✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.</div>
+              {stats && (
+                <div className="border-t border-primary/20 pt-1.5">
+                  <div className="font-semibold mb-1">ملخص عدالة الساعات:</div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                    <span>الأعلى: {stats.maxHours} س</span>
+                    <span>الأدنى: {stats.minHours} س</span>
+                    <span>المتوسط: {stats.avgHours} س</span>
+                    <span className={stats.spread <= 12 ? "text-primary font-semibold" : "text-amber-600 font-semibold"}>
+                      الفارق: {stats.spread} س
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
