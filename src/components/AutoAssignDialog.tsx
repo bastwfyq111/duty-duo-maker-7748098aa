@@ -73,6 +73,7 @@ export default function AutoAssignDialog({
     const result = autoAssign(employees, shifts, year, month, constraints);
     setPreview(result.employees);
     setWarnings(result.warnings);
+    setStats(result.stats ?? null);
   };
 
   const handleApply = () => {
@@ -80,6 +81,7 @@ export default function AutoAssignDialog({
       onApply(preview);
       setPreview(null);
       setWarnings([]);
+      setStats(null);
       onClose();
     }
   };
@@ -87,6 +89,7 @@ export default function AutoAssignDialog({
   const handleClose = () => {
     setPreview(null);
     setWarnings([]);
+    setStats(null);
     onClose();
   };
 
