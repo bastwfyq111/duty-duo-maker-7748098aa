@@ -35,9 +35,17 @@ function isMorningCode(code: string, shifts: Record<string, ShiftType>): boolean
 
 
 
+export interface AutoAssignStats {
+  maxHours: number;
+  minHours: number;
+  avgHours: number;
+  spread: number;   // maxHours - minHours
+}
+
 export interface AutoAssignResult {
   employees: Employee[];
   warnings: string[];
+  stats?: AutoAssignStats;
 }
 
 /** Helper: get slot keys for a given day */
