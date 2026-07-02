@@ -229,7 +229,7 @@ describe("autoAssign", () => {
 
     it("overwrites existing assignments when overrideExisting is true", () => {
       const employees: Employee[] = [
-        { name: "Alice", attendance: { 1: "N" } },
+        { name: "Alice", attendance: { "1-1": "N" } },
       ];
       const result = autoAssign(
         employees,
@@ -242,8 +242,8 @@ describe("autoAssign", () => {
           minStaffPerShift: { M: 1 },
         })
       );
-      // Day 1 should now have M (overridden)
-      expect(result.employees[0].attendance[1]).toBe("M");
+      // Day 1 slot 1 should now have M (overridden)
+      expect(result.employees[0].attendance["1-1"]).toBe("M");
     });
   });
 
