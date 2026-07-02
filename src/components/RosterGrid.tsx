@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getDaysArray, getDayName, isFriday, calcTotalHours, type ShiftType } from "@/lib/roster";
-import { getShiftCellStyle } from "@/lib/color-utils";
-import { generateDistinctHslColors } from "@/lib/color-utils";
+import { getShiftCellStyle, generateDistinctHslColors } from "@/lib/color-utils";
 import { computeAutoSchedule } from "@/lib/scheduler";
 import type { Employee } from "@/hooks/useRosterData";
 import { useRosterData } from "@/hooks/useRosterData";
@@ -20,6 +19,14 @@ interface RosterGridProps {
   onSplitCell?: (empIdx: number, day: number) => void;
 }
 
+type SchedulerSettings = {
+  minRestHours: number;
+  maxConsecutiveDays: number;
+  maxDailyShiftsPerEmployee: number;
+};
+
+const SETTINGS_KEY = "schedulerSettings";
+
 export default function RosterGrid({ 
   employees: propEmployees, shifts: propShifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell 
 }: RosterGridProps) {
@@ -28,6 +35,31 @@ export default function RosterGrid({
   const [contextMenu, setContextMenu] = useState<{ empIdx: number; day: number; x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const { bulkSetShifts, addShiftType } = useRosterData();
+
+  // scheduler settings stored locally
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<SchedulerSettings>({ minRestHours: 12, maxConsecutiveDays: 5, maxDailyShiftsPerEmployee: 1 });
+
+  // preview modal state and undo snapshot
+  const [previewSchedule, setPreviewSchedule] = useState<any | null>(null);
+  const [lastSnapshot, setLastSnapshot] = useState<Employee[] | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setSettings(prev => ({ ...prev, ...parsed }));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const saveSettings = (s: SchedulerSettings) => {
+    setSettings(s);
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+  };
 
   const isMerged = (empIdx: number, day: number): boolean => {
     return mergedCells.has(`${empIdx}-${day}`);
@@ -69,7 +101,7 @@ export default function RosterGrid({
     }
   };
 
-  // ----- New actions: generate color palette, auto-schedule -----
+  // ----- New actions: generate color palette, auto-schedule with preview, undo -----
   const handleGenerateColors = async () => {
     try {
       setBusy(true);
@@ -102,18 +134,48 @@ export default function RosterGrid({
         month,
         year,
         slotsPerDay,
-        constraints: { minRestHours: 12, maxConsecutiveDays: 5, maxDailyShiftsPerEmployee: 1 }
+        constraints: { minRestHours: settings.minRestHours, maxConsecutiveDays: settings.maxConsecutiveDays, maxDailyShiftsPerEmployee: settings.maxDailyShiftsPerEmployee }
       };
       const res = computeAutoSchedule(opts as any);
       if (res.success) {
-        // bulk update stored employees so app state persists
-        await bulkSetShifts(res.employees as Employee[]);
-        console.log("Auto-schedule applied", res.details);
+        // show preview modal instead of applying immediately
+        setPreviewSchedule(res);
       } else {
-        console.warn("Auto-schedule failed", res.details);
+        // still show details so user knows why
+        setPreviewSchedule(res);
       }
     } catch (err) {
       console.error("Auto-schedule error", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyPreview = async () => {
+    if (!previewSchedule) return;
+    try {
+      setBusy(true);
+      // keep undo snapshot
+      setLastSnapshot(propEmployees.map(e => ({ ...e, attendance: { ...(e.attendance || {}) } })));
+      await bulkSetShifts(previewSchedule.employees as Employee[]);
+      setPreviewSchedule(null);
+    } catch (err) {
+      console.error("Failed applying schedule", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelPreview = () => setPreviewSchedule(null);
+
+  const undoLast = async () => {
+    if (!lastSnapshot) return;
+    try {
+      setBusy(true);
+      await bulkSetShifts(lastSnapshot);
+      setLastSnapshot(null);
+    } catch (err) {
+      console.error("Undo failed", err);
     } finally {
       setBusy(false);
     }
@@ -129,9 +191,51 @@ export default function RosterGrid({
           <Button size="sm" onClick={handleAutoSchedule} variant="secondary" disabled={busy}>
             توزيع تلقائي للورديات
           </Button>
+          <Button size="sm" onClick={() => setSettingsOpen(s => !s)} variant="ghost">
+            ⚙️ إعدادات
+          </Button>
+          {lastSnapshot && (
+            <Button size="sm" onClick={undoLast} variant="destructive" disabled={busy}>
+              تراجع عن آخر تغييرات
+            </Button>
+          )}
         </div>
         <div className="text-xs text-muted-foreground">ملحوظة: التعديلات تُطبّق فوراً على التخزين المحلي</div>
       </div>
+
+      {settingsOpen && (
+        <div className="p-3 border-t border-border bg-muted/30">
+          <div className="flex gap-4 flex-wrap items-center">
+            <label className="text-xs">Min rest hours:
+              <input
+                type="number"
+                className="ml-2 w-20 text-xs"
+                value={settings.minRestHours}
+                onChange={(e) => setSettings({ ...settings, minRestHours: Math.max(0, Number(e.target.value)) })}
+              />
+            </label>
+            <label className="text-xs">Max consecutive days:
+              <input
+                type="number"
+                className="ml-2 w-20 text-xs"
+                value={settings.maxConsecutiveDays}
+                onChange={(e) => setSettings({ ...settings, maxConsecutiveDays: Math.max(1, Number(e.target.value)) })}
+              />
+            </label>
+            <label className="text-xs">Max daily shifts per employee:
+              <input
+                type="number"
+                className="ml-2 w-20 text-xs"
+                value={settings.maxDailyShiftsPerEmployee}
+                onChange={(e) => setSettings({ ...settings, maxDailyShiftsPerEmployee: Math.max(1, Number(e.target.value)) })}
+              />
+            </label>
+            <div className="ml-2">
+              <Button size="sm" onClick={() => saveSettings(settings)}>حفظ الإعدادات</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <table id="rosterTable" className="roster-table" dir="rtl">
         <thead>
@@ -207,7 +311,7 @@ export default function RosterGrid({
                       onContextMenu={(e) => handleContextMenu(e, empIdx, d)}
                     >
                       {merged ? (
-                        // خلية مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة
+                        // خلي�� مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة
                         <div
                           className="flex h-[56px] w-full items-center justify-center cursor-pointer transition-all duration-150 hover:ring-2 hover:ring-inset hover:ring-primary active:scale-95"
                           style={slotValues[0] ? getShiftCellStyle(shiftFor(slotValues[0])?.color) : undefined}
@@ -292,6 +396,49 @@ export default function RosterGrid({
                 دمج الخليتين 🔗
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal for schedule */}
+      {previewSchedule && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-3xl bg-card border border-border rounded-lg p-4">
+            <h3 className="text-sm font-bold mb-2">معاينة الجدول التلقائي</h3>
+            <div className="text-xs text-muted-foreground mb-3">تفاصيل التغييرات المعروضة لن تُحفظ حتى تضغط "تطبيق".</div>
+
+            <div className="overflow-auto max-h-72 border rounded p-2 bg-muted">
+              {previewSchedule.details?.violations && previewSchedule.details.violations.length > 0 && (
+                <div className="text-sm text-destructive mb-2">انتهاكات: {previewSchedule.details.violations.join(", ")}</div>
+              )}
+
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="text-left">الموظف</th>
+                    <th className="text-left">نمط الحضور (مقتطف)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewSchedule.employees.map((e: any, i: number) => (
+                    <tr key={i} className="border-t">
+                      <td className="py-1">{e.name}</td>
+                      <td className="py-1">
+                        {/* show up to first 6 assigned slots */}
+                        {Object.entries(e.attendance || {}).slice(0, 6).map(([k, v]: any, idx: number) => (
+                          <span key={idx} className="inline-block px-1 py-0.5 mr-1 rounded bg-accent/20">{k}: {v}</span>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-4">
+              <Button size="sm" onClick={cancelPreview} variant="ghost">إلغاء</Button>
+              <Button size="sm" onClick={applyPreview} disabled={busy}>تطبيق وحفظ</Button>
+            </div>
           </div>
         </div>
       )}
