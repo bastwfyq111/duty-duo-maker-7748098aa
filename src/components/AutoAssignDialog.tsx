@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Employee } from "@/hooks/useRosterData";
 import type { ShiftType } from "@/lib/roster";
-import { autoAssign, type AutoAssignConstraints } from "@/lib/auto-assign";
+import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";
 import { DAY_NAMES } from "@/lib/roster";
 
 interface AutoAssignDialogProps {
@@ -50,6 +50,7 @@ export default function AutoAssignDialog({
 
   const [preview, setPreview] = useState<Employee[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [stats, setStats] = useState<AutoAssignStats | null>(null);
 
   const toggleShift = (code: string) => {
     setSelectedShifts(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
@@ -72,6 +73,7 @@ export default function AutoAssignDialog({
     const result = autoAssign(employees, shifts, year, month, constraints);
     setPreview(result.employees);
     setWarnings(result.warnings);
+    setStats(result.stats ?? null);
   };
 
   const handleApply = () => {
@@ -79,6 +81,7 @@ export default function AutoAssignDialog({
       onApply(preview);
       setPreview(null);
       setWarnings([]);
+      setStats(null);
       onClose();
     }
   };
@@ -86,6 +89,7 @@ export default function AutoAssignDialog({
   const handleClose = () => {
     setPreview(null);
     setWarnings([]);
+    setStats(null);
     onClose();
   };
 
@@ -236,8 +240,21 @@ export default function AutoAssignDialog({
           )}
 
           {preview && (
-            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground">
-              ✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.
+            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground space-y-1.5">
+              <div>✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.</div>
+              {stats && (
+                <div className="border-t border-primary/20 pt-1.5">
+                  <div className="font-semibold mb-1">ملخص عدالة الساعات:</div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                    <span>الأعلى: {stats.maxHours} س</span>
+                    <span>الأدنى: {stats.minHours} س</span>
+                    <span>المتوسط: {stats.avgHours} س</span>
+                    <span className={stats.spread <= 12 ? "text-primary font-semibold" : "text-amber-600 font-semibold"}>
+                      الفارق: {stats.spread} س
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

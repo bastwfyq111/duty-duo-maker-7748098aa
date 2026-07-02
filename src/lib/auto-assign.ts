@@ -35,9 +35,17 @@ function isMorningCode(code: string, shifts: Record<string, ShiftType>): boolean
 
 
 
+export interface AutoAssignStats {
+  maxHours: number;
+  minHours: number;
+  avgHours: number;
+  spread: number;   // maxHours - minHours
+}
+
 export interface AutoAssignResult {
   employees: Employee[];
   warnings: string[];
+  stats?: AutoAssignStats;
 }
 
 /** Helper: get slot keys for a given day */
@@ -65,9 +73,11 @@ function getEmployeeShifts(emp: Employee): Set<string> {
 }
 
 /** Score a candidate for assignment: lower is better */
-function candidateScore(i: number, hoursPerEmp: number[], consecutive: number[], lastShift: string, code: string) {
-  // base: current hours (prefer lower)
+function candidateScore(i: number, hoursPerEmp: number[], workUnits: number[], consecutive: number[], lastShift: string, code: string) {
+  // base: current hours (prefer lower) — primary fairness signal
   let score = hoursPerEmp[i];
+  // secondary: prefer employees with fewer assigned working slots (balance count too)
+  score += workUnits[i] * 2;
   // penalize long consecutive streaks
   score += consecutive[i] * 3;
   // penalize if lastShift equals code to encourage diversity
@@ -99,6 +109,9 @@ export function autoAssign(
 
   // Running totals & helpers
   const hoursPerEmp: number[] = next.map(emp => calcTotalHours(emp.attendance, shifts));
+  const workUnits: number[] = next.map(emp =>
+    Object.values(emp.attendance).filter(code => (shifts[code]?.hours ?? 0) > 0).length
+  );
   const consecutive: number[] = next.map(() => 0);
   const consecutiveNights: number[] = next.map(() => 0);
   const lastShiftPerEmp: string[] = next.map(() => "");
@@ -188,10 +201,10 @@ export function autoAssign(
           return true;
         });
 
-      // Sort by a combined score (lower better): hours, consecutive, and lastShift preference
+      // Sort by a combined score (lower better): hours, work units, consecutive, and lastShift preference
       candidates.sort((a, b) => {
-        const as = candidateScore(a.i, hoursPerEmp, consecutive, lastShiftPerEmp[a.i], code);
-        const bs = candidateScore(b.i, hoursPerEmp, consecutive, lastShiftPerEmp[b.i], code);
+        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code);
+        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code);
         return as - bs;
       });
 
@@ -205,14 +218,17 @@ export function autoAssign(
       for (const { i, emp } of chosen) {
         // assign to best free slot
         assignToFreeSlot(emp, i, day, code, shifts, hoursPerEmp, c.overrideExisting);
+        if ((shifts[code]?.hours ?? 0) > 0) workUnits[i]++;
         counts[code] = (counts[code] || 0) + 1;
         lastShiftPerEmp[i] = code;
       }
     }
 
     // === PASS 2: fill remaining free slots while balancing hours ===
-    // Build employee order: prefer those with lower hours to balance load
-    const empOrder = next.map((_, i) => i).sort((a, b) => hoursPerEmp[a] - hoursPerEmp[b]);
+    // Build employee order: prefer those with lower hours (then fewer work units) to balance load
+    const empOrder = next.map((_, i) => i).sort((a, b) =>
+      hoursPerEmp[a] !== hoursPerEmp[b] ? hoursPerEmp[a] - hoursPerEmp[b] : workUnits[a] - workUnits[b]
+    );
 
     for (const empIdx of empOrder) {
       const emp = next[empIdx];
@@ -226,12 +242,20 @@ export function autoAssign(
         if (!code) continue;
 
         assignToFreeSlot(emp, empIdx, day, code, shifts, hoursPerEmp, c.overrideExisting);
+        if ((shifts[code]?.hours ?? 0) > 0) workUnits[empIdx]++;
         counts[code] = (counts[code] || 0) + 1;
         lastShiftPerEmp[empIdx] = code;
       }
     }
 
     // end of day loop
+  }
+
+  // === PASS 3: fairness rebalancing ===
+  // Move working shifts from the most-loaded employee to the least-loaded one
+  // as long as it reduces the hours spread without violating any constraint.
+  if (c.fairDistribution && next.length > 1) {
+    rebalanceHours(next, shifts, year, month, c, hoursPerEmp);
   }
 
   // Post-checks: warn if diversity required but not satisfied
@@ -249,7 +273,130 @@ export function autoAssign(
     }
   }
 
-  return { employees: next, warnings };
+  // Compute fairness stats over final hours
+  const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
+  const stats: AutoAssignStats = {
+    maxHours: finalHours.length ? Math.max(...finalHours) : 0,
+    minHours: finalHours.length ? Math.min(...finalHours) : 0,
+    avgHours: finalHours.length ? Math.round(finalHours.reduce((s, h) => s + h, 0) / finalHours.length) : 0,
+    spread: finalHours.length ? Math.max(...finalHours) - Math.min(...finalHours) : 0,
+  };
+
+  return { employees: next, warnings, stats };
+}
+
+/** Validate a single employee's schedule against hard constraints. */
+function isEmployeeScheduleValid(
+  emp: Employee,
+  shifts: Record<string, ShiftType>,
+  year: number,
+  month: number,
+  c: AutoAssignConstraints
+): boolean {
+  const daysInMonth = getDaysInMonth(year, month);
+  // Max monthly hours
+  if (calcTotalHours(emp.attendance, shifts) > c.maxMonthlyHours) return false;
+
+  const maxNights = c.maxConsecutiveNights ?? 2;
+  let consecutive = 0;
+  let consecutiveNights = 0;
+  let prevNight = false;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const s1 = getSlot(emp, day, 1);
+    const s2 = getSlot(emp, day, 2);
+    const worked = (shifts[s1]?.hours ?? 0) > 0 || (shifts[s2]?.hours ?? 0) > 0;
+    const night = isNightCode(s1, shifts) || isNightCode(s2, shifts);
+
+    // Consecutive working days
+    consecutive = worked ? consecutive + 1 : 0;
+    if (consecutive > c.maxConsecutiveDays) return false;
+
+    if (c.safeSequences) {
+      // No morning immediately after a night (prev day)
+      if (prevNight && (isMorningCode(s1, shifts) || isMorningCode(s2, shifts))) return false;
+      // Cap consecutive nights
+      consecutiveNights = night ? consecutiveNights + 1 : 0;
+      if (consecutiveNights > maxNights) return false;
+    }
+    prevNight = night;
+  }
+  return true;
+}
+
+/**
+ * Iteratively transfer working shifts from the employee with the most hours to
+ * the one with the least, shrinking the spread while respecting all constraints.
+ */
+function rebalanceHours(
+  employees: Employee[],
+  shifts: Record<string, ShiftType>,
+  year: number,
+  month: number,
+  c: AutoAssignConstraints,
+  hoursPerEmp: number[]
+): void {
+  const daysInMonth = getDaysInMonth(year, month);
+  const maxIterations = employees.length * daysInMonth * 2 + 50;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Find most- and least-loaded employees
+    let hi = 0, lo = 0;
+    for (let i = 1; i < employees.length; i++) {
+      if (hoursPerEmp[i] > hoursPerEmp[hi]) hi = i;
+      if (hoursPerEmp[i] < hoursPerEmp[lo]) lo = i;
+    }
+    if (hi === lo) break;
+    const spread = hoursPerEmp[hi] - hoursPerEmp[lo];
+    if (spread <= 0) break;
+
+    const hiEmp = employees[hi];
+    const loEmp = employees[lo];
+    let moved = false;
+
+    for (let day = 1; day <= daysInMonth && !moved; day++) {
+      for (const slot of [1, 2] as const) {
+        const code = getSlot(hiEmp, day, slot);
+        const sh = shifts[code]?.hours ?? 0;
+        if (!code || sh <= 0) continue;
+        // Only move if it strictly reduces the spread
+        if (spread <= sh) continue;
+        // lo must not already have this code that day
+        if (getSlot(loEmp, day, 1) === code || getSlot(loEmp, day, 2) === code) continue;
+        // Find a free slot for lo on that day
+        const loFree: 1 | 2 | null = !getSlot(loEmp, day, 1) ? 1 : !getSlot(loEmp, day, 2) ? 2 : null;
+        if (loFree === null) continue;
+        // Respect minimum staffing: removing from hi must not drop below the minimum
+        const min = c.minStaffPerShift[code] ?? 0;
+        if (min > 0) {
+          let count = 0;
+          for (const e of employees) {
+            if (getSlot(e, day, 1) === code || getSlot(e, day, 2) === code) count++;
+          }
+          if (count - 1 < min) continue;
+        }
+
+        // Tentatively apply the transfer
+        const hiKey = slotKey(day, slot);
+        const loKey = slotKey(day, loFree);
+        hiEmp.attendance[hiKey] = "";
+        loEmp.attendance[loKey] = code;
+
+        if (isEmployeeScheduleValid(loEmp, shifts, year, month, c) &&
+            isEmployeeScheduleValid(hiEmp, shifts, year, month, c)) {
+          hoursPerEmp[hi] -= sh;
+          hoursPerEmp[lo] += sh;
+          moved = true;
+          break;
+        }
+        // Revert
+        hiEmp.attendance[hiKey] = code;
+        loEmp.attendance[loKey] = "";
+      }
+    }
+
+    if (!moved) break;
+  }
 }
 
 /** Assign a shift code to the first available slot for an employee on a given day */

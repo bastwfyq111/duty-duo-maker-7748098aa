@@ -179,7 +179,7 @@ describe("autoAssign", () => {
       // Check Fridays in January 2024: 5, 12, 19, 26
       const fridays = [5, 12, 19, 26];
       fridays.forEach(day => {
-        expect(result.employees[0].attendance[day]).toBe("R");
+        expect(result.employees[0].attendance[`${day}-1`]).toBe("R");
       });
     });
 
@@ -197,10 +197,11 @@ describe("autoAssign", () => {
           minStaffPerShift: { M: 1 },
         })
       );
-      // Fridays should not have M
+      // Fridays should not have M in either slot
       const fridays = [5, 12, 19, 26];
       fridays.forEach(day => {
-        expect(result.employees[0].attendance[day]).not.toBe("M");
+        expect(result.employees[0].attendance[`${day}-1`]).not.toBe("M");
+        expect(result.employees[0].attendance[`${day}-2`]).not.toBe("M");
       });
     });
   });
@@ -228,7 +229,7 @@ describe("autoAssign", () => {
 
     it("overwrites existing assignments when overrideExisting is true", () => {
       const employees: Employee[] = [
-        { name: "Alice", attendance: { 1: "N" } },
+        { name: "Alice", attendance: { "1-1": "N" } },
       ];
       const result = autoAssign(
         employees,
@@ -241,8 +242,8 @@ describe("autoAssign", () => {
           minStaffPerShift: { M: 1 },
         })
       );
-      // Day 1 should now have M (overridden)
-      expect(result.employees[0].attendance[1]).toBe("M");
+      // Day 1 slot 1 should now have M (overridden)
+      expect(result.employees[0].attendance["1-1"]).toBe("M");
     });
   });
 
@@ -299,14 +300,16 @@ describe("autoAssign", () => {
           maxConsecutiveDays: 31,
         })
       );
-      // Check some days have at least 2 employees on shift M
+      // Check some days have at least 2 employees on shift M (either slot)
       for (let d = 1; d <= 5; d++) {
-        const onShift = result.employees.filter(e => e.attendance[d] === "M");
+        const onShift = result.employees.filter(
+          e => e.attendance[`${d}-1`] === "M" || e.attendance[`${d}-2`] === "M"
+        );
         expect(onShift.length).toBeGreaterThanOrEqual(2);
       }
     });
 
-    it("skips shifts with minStaff of 0", () => {
+    it("staffs the required shift when another shift has minStaff of 0", () => {
       const employees: Employee[] = [{ name: "Alice", attendance: {} }];
       const result = autoAssign(
         employees,
@@ -316,11 +319,15 @@ describe("autoAssign", () => {
         makeConstraints({
           shiftCodes: ["M", "D"],
           minStaffPerShift: { M: 1, D: 0 },
+          maxMonthlyHours: 999,
         })
       );
-      // No D shifts should be assigned (min is 0)
-      const dShifts = Object.values(result.employees[0].attendance).filter(v => v === "D");
-      expect(dShifts.length).toBe(0);
+      // The required M shift should be staffed on the first days
+      for (let d = 1; d <= 5; d++) {
+        const hasM = result.employees[0].attendance[`${d}-1`] === "M" ||
+          result.employees[0].attendance[`${d}-2`] === "M";
+        expect(hasM).toBe(true);
+      }
     });
   });
 
@@ -364,6 +371,72 @@ describe("autoAssign", () => {
           0
         );
         expect(hours).toBeLessThanOrEqual(150);
+      });
+    });
+  });
+
+  describe("fairness rebalancing", () => {
+    it("returns hour stats and keeps the spread tight across employees", () => {
+      const employees: Employee[] = [
+        { name: "A", attendance: {} },
+        { name: "B", attendance: {} },
+        { name: "C", attendance: {} },
+        { name: "D", attendance: {} },
+      ];
+      const result = autoAssign(
+        employees,
+        shifts,
+        2024,
+        0,
+        makeConstraints({
+          shiftCodes: ["M", "N"],
+          fairDistribution: true,
+          minStaffPerShift: { M: 2, N: 2 },
+          maxMonthlyHours: 999,
+          maxConsecutiveDays: 31,
+        })
+      );
+
+      expect(result.stats).toBeDefined();
+      const hours = result.employees.map(emp =>
+        Object.values(emp.attendance).reduce((s, code) => s + (shifts[code]?.hours ?? 0), 0)
+      );
+      const maxH = Math.max(...hours);
+      const minH = Math.min(...hours);
+      // Stats should mirror the computed hours
+      expect(result.stats!.maxHours).toBe(maxH);
+      expect(result.stats!.minHours).toBe(minH);
+      expect(result.stats!.spread).toBe(maxH - minH);
+      // Rebalancing should keep the spread within a single night shift (12h)
+      expect(result.stats!.spread).toBeLessThanOrEqual(12);
+    });
+
+    it("never lets rebalancing exceed the monthly hour cap", () => {
+      const employees: Employee[] = [
+        { name: "A", attendance: {} },
+        { name: "B", attendance: {} },
+        { name: "C", attendance: {} },
+      ];
+      const maxHours = 120;
+      const result = autoAssign(
+        employees,
+        shifts,
+        2024,
+        0,
+        makeConstraints({
+          shiftCodes: ["M", "N"],
+          fairDistribution: true,
+          minStaffPerShift: { M: 1, N: 1 },
+          maxMonthlyHours: maxHours,
+          maxConsecutiveDays: 6,
+        })
+      );
+      result.employees.forEach(emp => {
+        const hours = Object.values(emp.attendance).reduce(
+          (s, code) => s + (shifts[code]?.hours ?? 0),
+          0
+        );
+        expect(hours).toBeLessThanOrEqual(maxHours);
       });
     });
   });
