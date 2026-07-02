@@ -201,10 +201,10 @@ export function autoAssign(
           return true;
         });
 
-      // Sort by a combined score (lower better): hours, consecutive, and lastShift preference
+      // Sort by a combined score (lower better): hours, work units, consecutive, and lastShift preference
       candidates.sort((a, b) => {
-        const as = candidateScore(a.i, hoursPerEmp, consecutive, lastShiftPerEmp[a.i], code);
-        const bs = candidateScore(b.i, hoursPerEmp, consecutive, lastShiftPerEmp[b.i], code);
+        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code);
+        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code);
         return as - bs;
       });
 
@@ -218,6 +218,7 @@ export function autoAssign(
       for (const { i, emp } of chosen) {
         // assign to best free slot
         assignToFreeSlot(emp, i, day, code, shifts, hoursPerEmp, c.overrideExisting);
+        if ((shifts[code]?.hours ?? 0) > 0) workUnits[i]++;
         counts[code] = (counts[code] || 0) + 1;
         lastShiftPerEmp[i] = code;
       }
