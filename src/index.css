@@ -1,0 +1,245 @@
+/* Vazirmatn font loaded via index.html link tags */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Emerald & Gold — Prestige palette */
+    --background: 45 44% 94%;              /* #f5f0e0 cream */
+    --foreground: 158 78% 12%;             /* deep emerald ink */
+
+    --card: 40 50% 98%;
+    --card-foreground: 158 78% 12%;
+
+    --popover: 40 50% 98%;
+    --popover-foreground: 158 78% 12%;
+
+    --primary: 158 84% 16%;                /* #064e3b deep emerald */
+    --primary-foreground: 45 60% 96%;
+    --primary-glow: 160 65% 27%;           /* #0d7a5f */
+
+    --secondary: 45 40% 88%;
+    --secondary-foreground: 158 78% 12%;
+
+    --muted: 45 30% 90%;
+    --muted-foreground: 158 20% 32%;
+
+    --accent: 44 55% 54%;                  /* #c9a84c gold */
+    --accent-foreground: 158 78% 12%;
+    --accent-glow: 44 70% 66%;
+
+    --destructive: 0 74% 42%;
+    --destructive-foreground: 45 60% 96%;
+
+    --border: 158 30% 78%;
+    --input: 158 30% 82%;
+    --ring: 44 55% 54%;
+
+    --radius: 0.75rem;
+    --radius-inner: 10px;
+    --radius-outer: 16px;
+
+    /* Shift tokens (kept for compatibility, refined tones) */
+    --shift-morning: 199 89% 48%;
+    --shift-day: 38 92% 50%;
+    --shift-night: 263 70% 50%;
+    --shift-rest: 142 71% 45%;
+    --weekend: 44 60% 82%;
+
+    /* Signature gradients & shadows */
+    --gradient-primary: linear-gradient(135deg, hsl(158 84% 16%), hsl(160 65% 27%));
+    --gradient-gold: linear-gradient(135deg, hsl(44 55% 54%), hsl(44 70% 66%));
+    --gradient-page: radial-gradient(1200px 800px at 100% -10%, hsla(160, 65%, 27%, 0.10), transparent 60%),
+                     radial-gradient(1000px 700px at -10% 110%, hsla(44, 70%, 66%, 0.14), transparent 55%),
+                     linear-gradient(180deg, hsl(45 44% 96%), hsl(45 44% 92%));
+    --shadow-elegant: 0 10px 30px -10px hsla(158, 84%, 16%, 0.25);
+    --shadow-gold: 0 8px 24px -8px hsla(44, 55%, 40%, 0.35);
+    --shadow-sm: 0 1px 2px hsla(158, 40%, 15%, 0.06);
+    --shadow-md: 0 0 0 1px hsla(158, 40%, 15%, .06), 0 2px 4px hsla(158, 40%, 15%, .05), 0 8px 20px -12px hsla(158, 40%, 15%, .18);
+    --shadow-lg: 0 0 0 1px hsla(158, 40%, 15%, .05), 0 4px 8px hsla(158, 40%, 15%, .06), 0 20px 40px -18px hsla(158, 40%, 15%, .22);
+    --easing: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    --sidebar-background: 45 44% 96%;
+    --sidebar-foreground: 158 78% 12%;
+    --sidebar-primary: 158 84% 16%;
+    --sidebar-primary-foreground: 45 60% 96%;
+    --sidebar-accent: 44 55% 54%;
+    --sidebar-accent-foreground: 158 78% 12%;
+    --sidebar-border: 158 30% 78%;
+    --sidebar-ring: 44 55% 54%;
+  }
+
+  .dark {
+    --background: 158 40% 8%;
+    --foreground: 45 44% 94%;
+    --card: 158 40% 11%;
+    --card-foreground: 45 44% 94%;
+    --popover: 158 40% 11%;
+    --popover-foreground: 45 44% 94%;
+    --primary: 44 55% 54%;
+    --primary-foreground: 158 78% 12%;
+    --secondary: 158 30% 16%;
+    --secondary-foreground: 45 44% 94%;
+    --muted: 158 30% 16%;
+    --muted-foreground: 45 20% 70%;
+    --accent: 44 55% 54%;
+    --accent-foreground: 158 78% 12%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 45 44% 94%;
+    --border: 158 30% 22%;
+    --input: 158 30% 22%;
+    --ring: 44 55% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    direction: rtl;
+  }
+
+  body {
+    @apply text-foreground;
+    background: var(--gradient-page);
+    background-attachment: fixed;
+    font-family: 'Vazirmatn', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-wrap: pretty;
+    overscroll-behavior: none;
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .roster-container {
+    max-width: 1200px;
+    margin: 0.75rem auto;
+    padding: 0.75rem;
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(14px);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-outer);
+    box-shadow: var(--shadow-lg);
+  }
+
+  @media (min-width: 640px) {
+    .roster-container {
+      margin: 1.5rem auto;
+      padding: 1.5rem;
+    }
+  }
+
+  .btn-gold {
+    background: var(--gradient-gold);
+    color: hsl(var(--accent-foreground));
+    box-shadow: var(--shadow-gold);
+    font-weight: 700;
+  }
+  .btn-primary-emerald {
+    background: var(--gradient-primary);
+    color: hsl(var(--primary-foreground));
+    box-shadow: var(--shadow-elegant);
+    font-weight: 700;
+  }
+
+  .roster-table {
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    width: 100%;
+    min-width: 900px;
+  }
+
+  .roster-table th,
+  .roster-table td {
+    border: 1.5px solid hsl(158 60% 25%);
+    padding: 0.55rem 0.375rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    min-width: 42px;
+    color: hsl(158 78% 12%);
+  }
+
+  .roster-table thead th {
+    background: var(--gradient-primary);
+    color: hsl(var(--accent));
+    text-shadow: 0 1px 2px hsla(0,0%,0%,0.2);
+    border-color: hsl(158 84% 12%);
+  }
+
+  .roster-table th:first-child,
+  .roster-table td:first-child {
+    border-right: 1.5px solid hsl(158 60% 25%);
+  }
+
+  .emp-name-col {
+    position: sticky;
+    right: 0;
+    background: hsl(var(--card) / 0.96);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+    border-left: 2px solid hsl(var(--accent) / 0.5) !important;
+    min-width: 250px;
+    font-weight: 700;
+  }
+
+  .cell-M { background: hsla(199, 89%, 48%, 0.14); color: hsl(199, 89%, 26%); font-weight: 700; }
+  .cell-D { background: hsla(38, 92%, 50%, 0.16); color: hsl(38, 92%, 28%); font-weight: 700; }
+  .cell-N { background: hsla(263, 70%, 50%, 0.14); color: hsl(263, 70%, 32%); font-weight: 700; }
+  .cell-R { background: hsla(142, 71%, 45%, 0.14); color: hsl(142, 71%, 26%); font-weight: 700; }
+  .cell-OFF { background: hsla(210, 20%, 50%, 0.08); color: hsl(210, 20%, 40%); font-weight: 600; }
+
+  .weekend-col {
+    background: var(--gradient-gold) !important;
+    color: hsl(158 78% 12%) !important;
+    font-weight: 800 !important;
+    text-shadow: 0 1px 0 hsla(45, 60%, 96%, 0.5);
+  }
+
+  .total-col {
+    background: var(--gradient-primary);
+    color: hsl(var(--accent));
+    font-weight: 800;
+    min-width: 65px;
+  }
+
+  .table-wrapper::-webkit-scrollbar { height: 6px; }
+  .table-wrapper::-webkit-scrollbar-track { background: transparent; }
+  .table-wrapper::-webkit-scrollbar-thumb {
+    background: hsl(var(--accent) / 0.5);
+    border-radius: 4px;
+  }
+}
+
+/* Safe area for notched phones */
+.safe-area-inset {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 420px) {
+  .roster-table th,
+  .roster-table td {
+    padding: 0.45rem 0.2rem;
+    font-size: 0.82rem;
+    min-width: 36px;
+  }
+  .emp-name-col {
+    min-width: 180px !important;
+    font-size: 0.8rem !important;
+  }
+}
+
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+}
