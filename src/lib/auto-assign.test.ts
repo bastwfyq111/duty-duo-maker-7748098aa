@@ -374,4 +374,70 @@ describe("autoAssign", () => {
       });
     });
   });
+
+  describe("fairness rebalancing", () => {
+    it("returns hour stats and keeps the spread tight across employees", () => {
+      const employees: Employee[] = [
+        { name: "A", attendance: {} },
+        { name: "B", attendance: {} },
+        { name: "C", attendance: {} },
+        { name: "D", attendance: {} },
+      ];
+      const result = autoAssign(
+        employees,
+        shifts,
+        2024,
+        0,
+        makeConstraints({
+          shiftCodes: ["M", "N"],
+          fairDistribution: true,
+          minStaffPerShift: { M: 2, N: 2 },
+          maxMonthlyHours: 999,
+          maxConsecutiveDays: 31,
+        })
+      );
+
+      expect(result.stats).toBeDefined();
+      const hours = result.employees.map(emp =>
+        Object.values(emp.attendance).reduce((s, code) => s + (shifts[code]?.hours ?? 0), 0)
+      );
+      const maxH = Math.max(...hours);
+      const minH = Math.min(...hours);
+      // Stats should mirror the computed hours
+      expect(result.stats!.maxHours).toBe(maxH);
+      expect(result.stats!.minHours).toBe(minH);
+      expect(result.stats!.spread).toBe(maxH - minH);
+      // Rebalancing should keep the spread within a single night shift (12h)
+      expect(result.stats!.spread).toBeLessThanOrEqual(12);
+    });
+
+    it("never lets rebalancing exceed the monthly hour cap", () => {
+      const employees: Employee[] = [
+        { name: "A", attendance: {} },
+        { name: "B", attendance: {} },
+        { name: "C", attendance: {} },
+      ];
+      const maxHours = 120;
+      const result = autoAssign(
+        employees,
+        shifts,
+        2024,
+        0,
+        makeConstraints({
+          shiftCodes: ["M", "N"],
+          fairDistribution: true,
+          minStaffPerShift: { M: 1, N: 1 },
+          maxMonthlyHours: maxHours,
+          maxConsecutiveDays: 6,
+        })
+      );
+      result.employees.forEach(emp => {
+        const hours = Object.values(emp.attendance).reduce(
+          (s, code) => s + (shifts[code]?.hours ?? 0),
+          0
+        );
+        expect(hours).toBeLessThanOrEqual(maxHours);
+      });
+    });
+  });
 });
