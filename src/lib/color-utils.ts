@@ -55,11 +55,30 @@ export function getShiftFillRgb(color?: string): [number, number, number] | unde
   return hslToRgb(parsed.h, parsed.s, Math.min(95, parsed.l + 35));
 }
 
+/** Compute perceived relative luminance from an RGB tuple (0-255). */
+function rgbRelativeLuminance([r, g, b]: [number, number, number]): number {
+  // Convert to sRGB 0..1
+  const srgb = [r, g, b].map(c => c / 255);
+  const linear = srgb.map(c => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+/** Choose a contrasting text color (black or white) for a given stored HSL color. */
+export function getContrastingTextColor(color?: string): string {
+  if (!color) return "hsl(0 0% 10%)"; // default dark text
+  const parsed = parseHslString(color);
+  if (!parsed) return "hsl(0 0% 10%)";
+  const rgb = hslToRgb(parsed.h, parsed.s, parsed.l);
+  const lum = rgbRelativeLuminance(rgb);
+  // WCAG suggests threshold around 0.179 for choosing black/white; we tune slightly
+  return lum > 0.55 ? "hsl(0 0% 10%)" : "hsl(0 0% 100%)";
+}
+
 /** Build an inline cell background style from a stored HSL color string. */
 export function getShiftCellStyle(color?: string): React.CSSProperties {
   if (!color) return {};
   const c = formatHslForCss(color);
-  return { backgroundColor: `hsla(${c}, 0.18)`, color: "hsl(0 0% 10%)", fontWeight: 800 };
+  return { backgroundColor: `hsla(${c}, 0.18)`, color: getContrastingTextColor(color), fontWeight: 800 };
 }
 
 /** Convert a stored HSL string to a full `hsl(...)` CSS value. */
@@ -70,4 +89,23 @@ export function hslStringToCss(color: string): string {
 /** Convert a stored HSL string to a `hsla(..., alpha)` CSS value. */
 export function hslStringToHsla(color: string, alpha: number): string {
   return `hsla(${formatHslForCss(color)},${alpha})`;
+}
+
+/**
+ * Generate a palette of visually-distinct HSL colors as stored strings like "199 89% 48%".
+ * - counts are spaced by hue, with optional slight variation in saturation/lightness to reduce collisions.
+ */
+export function generateDistinctHslColors(count: number, opts?: { saturation?: number; lightness?: number; lightnessVariance?: number }): string[] {
+  const sat = opts?.saturation ?? 85;
+  const light = opts?.lightness ?? 50;
+  const varL = opts?.lightnessVariance ?? 8;
+
+  const colors: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const hue = Math.round((360 * i) / count);
+    // gently vary lightness to avoid identical perceived tones when count is large
+    const l = Math.max(30, Math.min(75, light + Math.round(((i % 3) - 1) * varL)));
+    colors.push(`${hue} ${sat}% ${l}%`);
+  }
+  return colors;
 }
