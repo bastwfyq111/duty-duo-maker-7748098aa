@@ -225,8 +225,10 @@ export function autoAssign(
     }
 
     // === PASS 2: fill remaining free slots while balancing hours ===
-    // Build employee order: prefer those with lower hours to balance load
-    const empOrder = next.map((_, i) => i).sort((a, b) => hoursPerEmp[a] - hoursPerEmp[b]);
+    // Build employee order: prefer those with lower hours (then fewer work units) to balance load
+    const empOrder = next.map((_, i) => i).sort((a, b) =>
+      hoursPerEmp[a] !== hoursPerEmp[b] ? hoursPerEmp[a] - hoursPerEmp[b] : workUnits[a] - workUnits[b]
+    );
 
     for (const empIdx of empOrder) {
       const emp = next[empIdx];
@@ -240,6 +242,7 @@ export function autoAssign(
         if (!code) continue;
 
         assignToFreeSlot(emp, empIdx, day, code, shifts, hoursPerEmp, c.overrideExisting);
+        if ((shifts[code]?.hours ?? 0) > 0) workUnits[empIdx]++;
         counts[code] = (counts[code] || 0) + 1;
         lastShiftPerEmp[empIdx] = code;
       }
