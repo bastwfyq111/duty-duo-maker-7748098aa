@@ -179,7 +179,7 @@ describe("autoAssign", () => {
       // Check Fridays in January 2024: 5, 12, 19, 26
       const fridays = [5, 12, 19, 26];
       fridays.forEach(day => {
-        expect(result.employees[0].attendance[day]).toBe("R");
+        expect(result.employees[0].attendance[`${day}-1`]).toBe("R");
       });
     });
 
@@ -197,10 +197,11 @@ describe("autoAssign", () => {
           minStaffPerShift: { M: 1 },
         })
       );
-      // Fridays should not have M
+      // Fridays should not have M in either slot
       const fridays = [5, 12, 19, 26];
       fridays.forEach(day => {
-        expect(result.employees[0].attendance[day]).not.toBe("M");
+        expect(result.employees[0].attendance[`${day}-1`]).not.toBe("M");
+        expect(result.employees[0].attendance[`${day}-2`]).not.toBe("M");
       });
     });
   });
