@@ -52,9 +52,27 @@ export function getDayName(year: number, month: number, day: number): string {
   return DAY_NAMES[new Date(year, month, day).getDay()];
 }
 
-// التعديل هنا: تم تغيير نوع المفتاح من number إلى string | number ليدعم نظام الخليتين ويجمع ساعاتهما معاً تلقائياً
+// التعديل هنا: تم تغيير نوع المفتاح من number إلى string | number ليدعم نظام الخليتين
+// وتم تعديل الحساب ليأخذ كل وردية مرة واحدة في اليوم (إذا كانت الورديات مكررة في الخليتين)
 export function calcTotalHours(attendance: Record<string | number, string>, shifts: Record<string, ShiftType>): number {
-  return Object.values(attendance).reduce((sum, val) => {
-    return sum + (shifts[val]?.hours ?? 0);
-  }, 0);
+  // keys are like "{day}-{slot}" e.g. "1-1", "1-2"
+  // We'll iterate days by extracting day numbers from keys, collect unique codes per day,
+  // and sum each unique shift's hours once per day.
+  const codesByDay: Record<number, Set<string>> = {};
+  Object.entries(attendance).forEach(([k, code]) => {
+    if (!code) return;
+    const parts = String(k).split("-");
+    const day = Number(parts[0]);
+    if (Number.isNaN(day)) return;
+    if (!codesByDay[day]) codesByDay[day] = new Set<string>();
+    codesByDay[day].add(code);
+  });
+
+  let sum = 0;
+  Object.values(codesByDay).forEach(set => {
+    set.forEach(code => {
+      sum += shifts[code]?.hours ?? 0;
+    });
+  });
+  return sum;
 }
