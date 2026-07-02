@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { getDaysArray, getDayName, isFriday, calcTotalHours, type ShiftType } from "@/lib/roster";
 import { getShiftCellStyle } from "@/lib/color-utils";
+import { generateDistinctHslColors } from "@/lib/color-utils";
+import { computeAutoSchedule } from "@/lib/scheduler";
 import type { Employee } from "@/hooks/useRosterData";
+import { useRosterData } from "@/hooks/useRosterData";
 import { Button } from "@/components/ui/button";
 
 interface RosterGridProps {
@@ -18,11 +21,13 @@ interface RosterGridProps {
 }
 
 export default function RosterGrid({ 
-  employees, shifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell 
+  employees: propEmployees, shifts: propShifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell 
 }: RosterGridProps) {
   const days = useMemo(() => getDaysArray(year, month), [year, month]);
   const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ empIdx: number; day: number; x: number; y: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { bulkSetShifts, addShiftType } = useRosterData();
 
   const isMerged = (empIdx: number, day: number): boolean => {
     return mergedCells.has(`${empIdx}-${day}`);
@@ -64,8 +69,70 @@ export default function RosterGrid({
     }
   };
 
+  // ----- New actions: generate color palette, auto-schedule -----
+  const handleGenerateColors = async () => {
+    try {
+      setBusy(true);
+      const codes = Object.keys(propShifts);
+      const count = Math.max(12, codes.length);
+      const palette = generateDistinctHslColors(count, { saturation: 85, lightness: 50, lightnessVariance: 8 });
+      codes.forEach((code, i) => {
+        const base = propShifts[code] || { hours: 0, label: code };
+        // assign a color from palette
+        addShiftType(code, { ...base, color: palette[i % palette.length] });
+      });
+      // small delay to ensure storage updated
+      await new Promise(res => setTimeout(res, 120));
+      console.log("Generated and applied palette for shift codes", codes);
+    } catch (err) {
+      console.error("Failed to generate colors", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAutoSchedule = async () => {
+    try {
+      setBusy(true);
+      // prepare employees snapshot from props
+      const emps = propEmployees.map(e => ({ name: e.name, attendance: { ...(e.attendance || {}) } }));
+      const opts = {
+        employees: emps,
+        shifts: propShifts,
+        month,
+        year,
+        slotsPerDay,
+        constraints: { minRestHours: 12, maxConsecutiveDays: 5, maxDailyShiftsPerEmployee: 1 }
+      };
+      const res = computeAutoSchedule(opts as any);
+      if (res.success) {
+        // bulk update stored employees so app state persists
+        await bulkSetShifts(res.employees as Employee[]);
+        console.log("Auto-schedule applied", res.details);
+      } else {
+        console.warn("Auto-schedule failed", res.details);
+      }
+    } catch (err) {
+      console.error("Auto-schedule error", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div dir="rtl" className="table-wrapper overflow-x-auto -webkit-overflow-scrolling-touch mt-4 rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 p-2">
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleGenerateColors} disabled={busy}>
+            توليد ألوان تلقائية
+          </Button>
+          <Button size="sm" onClick={handleAutoSchedule} variant="secondary" disabled={busy}>
+            توزيع تلقائي للورديات
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">ملحوظة: التعديلات تُطبّق فوراً على التخزين المحلي</div>
+      </div>
+
       <table id="rosterTable" className="roster-table" dir="rtl">
         <thead>
           <tr className="bg-foreground text-background">
@@ -94,8 +161,8 @@ export default function RosterGrid({
           </tr>
         </thead>
         <tbody>
-          {employees.map((emp, empIdx) => {
-            const totalHours = calcTotalHours(emp.attendance, shifts);
+          {propEmployees.map((emp, empIdx) => {
+            const totalHours = calcTotalHours(emp.attendance, propShifts);
             return (
               <tr key={empIdx} className="hover:bg-accent/30 transition-colors">
                 <td className="emp-name-col text-xs">
@@ -106,7 +173,7 @@ export default function RosterGrid({
                       className="w-full max-w-[110px] text-xs font-semibold bg-transparent border border-border rounded px-1 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-primary [...]"
                       title="تبديل الموقع مع موظف آخر"
                     >
-                      {employees.map((e, i) => (
+                      {propEmployees.map((e, i) => (
                         <option key={i} value={i}>{e.name}</option>
                       ))}
                     </select>
@@ -131,7 +198,7 @@ export default function RosterGrid({
                     slotValues.push(val);
                   }
 
-                  const shiftFor = (val: string) => val ? shifts[val] : undefined;
+                  const shiftFor = (val: string) => val ? propShifts[val] : undefined;
 
                   return (
                     <td
@@ -165,7 +232,7 @@ export default function RosterGrid({
                             return (
                               <div
                                 key={idx}
-                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all duration-150 hover:ring-2 hover:ring-inset hover:ring-primary active:scale-95 ${idx < slotValues.length - 1 ? 'border-b border-black/10' : ''}`}
+                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all [...]`}
                                 style={val ? getShiftCellStyle(shift?.color) : undefined}
                                 onClick={() => handleCellClickWithContext(empIdx, d, idx + 1)}
                                 onContextMenu={(e) => handleContextMenu(e, empIdx, d)}
@@ -191,7 +258,7 @@ export default function RosterGrid({
               </tr>
             );
           })}
-          {employees.length === 0 && (
+          {propEmployees.length === 0 && (
             <tr>
               <td colSpan={days.length + 2} className="py-12 text-muted-foreground text-sm">
                 لا يوجد موظفين. أضف موظفاً للبدء.
