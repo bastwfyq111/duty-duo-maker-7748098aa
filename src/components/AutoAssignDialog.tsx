@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Employee } from "@/hooks/useRosterData";
 import type { ShiftType } from "@/lib/roster";
-import { autoAssign, type AutoAssignConstraints } from "@/lib/auto-assign";
+import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";
 import { DAY_NAMES } from "@/lib/roster";
 
 interface AutoAssignDialogProps {
