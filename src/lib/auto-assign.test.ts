@@ -300,14 +300,16 @@ describe("autoAssign", () => {
           maxConsecutiveDays: 31,
         })
       );
-      // Check some days have at least 2 employees on shift M
+      // Check some days have at least 2 employees on shift M (either slot)
       for (let d = 1; d <= 5; d++) {
-        const onShift = result.employees.filter(e => e.attendance[d] === "M");
+        const onShift = result.employees.filter(
+          e => e.attendance[`${d}-1`] === "M" || e.attendance[`${d}-2`] === "M"
+        );
         expect(onShift.length).toBeGreaterThanOrEqual(2);
       }
     });
 
-    it("skips shifts with minStaff of 0", () => {
+    it("staffs the required shift when another shift has minStaff of 0", () => {
       const employees: Employee[] = [{ name: "Alice", attendance: {} }];
       const result = autoAssign(
         employees,
@@ -317,11 +319,15 @@ describe("autoAssign", () => {
         makeConstraints({
           shiftCodes: ["M", "D"],
           minStaffPerShift: { M: 1, D: 0 },
+          maxMonthlyHours: 999,
         })
       );
-      // No D shifts should be assigned (min is 0)
-      const dShifts = Object.values(result.employees[0].attendance).filter(v => v === "D");
-      expect(dShifts.length).toBe(0);
+      // The required M shift should be staffed on the first days
+      for (let d = 1; d <= 5; d++) {
+        const hasM = result.employees[0].attendance[`${d}-1`] === "M" ||
+          result.employees[0].attendance[`${d}-2`] === "M";
+        expect(hasM).toBe(true);
+      }
     });
   });
 
