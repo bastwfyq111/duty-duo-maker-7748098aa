@@ -109,6 +109,9 @@ export function autoAssign(
 
   // Running totals & helpers
   const hoursPerEmp: number[] = next.map(emp => calcTotalHours(emp.attendance, shifts));
+  const workUnits: number[] = next.map(emp =>
+    Object.values(emp.attendance).filter(code => (shifts[code]?.hours ?? 0) > 0).length
+  );
   const consecutive: number[] = next.map(() => 0);
   const consecutiveNights: number[] = next.map(() => 0);
   const lastShiftPerEmp: string[] = next.map(() => "");
