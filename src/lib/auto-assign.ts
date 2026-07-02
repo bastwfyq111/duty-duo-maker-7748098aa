@@ -73,9 +73,11 @@ function getEmployeeShifts(emp: Employee): Set<string> {
 }
 
 /** Score a candidate for assignment: lower is better */
-function candidateScore(i: number, hoursPerEmp: number[], consecutive: number[], lastShift: string, code: string) {
-  // base: current hours (prefer lower)
+function candidateScore(i: number, hoursPerEmp: number[], workUnits: number[], consecutive: number[], lastShift: string, code: string) {
+  // base: current hours (prefer lower) — primary fairness signal
   let score = hoursPerEmp[i];
+  // secondary: prefer employees with fewer assigned working slots (balance count too)
+  score += workUnits[i] * 2;
   // penalize long consecutive streaks
   score += consecutive[i] * 3;
   // penalize if lastShift equals code to encourage diversity
