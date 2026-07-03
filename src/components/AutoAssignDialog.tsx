@@ -7,7 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { Employee } from "@/hooks/useRosterData";
 import type { ShiftType } from "@/lib/roster";
 import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";
-import { DAY_NAMES } from "@/lib/roster";
 
 interface AutoAssignDialogProps {
   open: boolean;
@@ -27,16 +26,10 @@ export default function AutoAssignDialog({
     () => Object.keys(shifts).filter(c => (shifts[c]?.hours ?? 0) > 0),
     [shifts]
   );
-  const restShiftCodes = useMemo(
-    () => Object.keys(shifts).filter(c => (shifts[c]?.hours ?? 0) === 0),
-    [shifts]
-  );
 
   const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
   const [maxHours, setMaxHours] = useState(180);
   const [maxConsecutive, setMaxConsecutive] = useState(6);
-  const [restDay, setRestDay] = useState<number | null>(5); // Friday
-  const [restCode, setRestCode] = useState<string>(restShiftCodes[0] || "");
   const [minStaff, setMinStaff] = useState<Record<string, number>>(() => {
     const r: Record<string, number> = {};
     workingShiftCodes.forEach(c => { r[c] = 1; });
@@ -63,11 +56,9 @@ export default function AutoAssignDialog({
       shiftCodes: selectedShifts,
       maxMonthlyHours: maxHours,
       maxConsecutiveDays: maxConsecutive,
-      weeklyRestDayOfWeek: restDay,
       minStaffPerShift: minStaff,
       fairDistribution: fair,
       overrideExisting: override,
-      restCode: restCode || undefined,
       diverseShifts: diverseShifts, // ✨ جديد
       safeSequences,
       maxConsecutiveNights,
@@ -101,7 +92,7 @@ export default function AutoAssignDialog({
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-right">التوزيع التلقائي للورديات</DialogTitle>
+          <DialogTitle className="text-right">التو��يع التلقائي للورديات</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 text-right">
@@ -150,39 +141,10 @@ export default function AutoAssignDialog({
           </div>
 
           <div>
-            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>
+            <Label className="text-xs">الحد ��لأقصى لأيام العمل المتتالية</Label>
             <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
               onChange={e => setMaxConsecutive(Number(e.target.value))} />
           </div>
-
-          <div>
-            <Label className="text-xs">يوم الراحة الأسبوعي</Label>
-            <select
-              value={restDay === null ? "" : restDay}
-              onChange={e => setRestDay(e.target.value === "" ? null : Number(e.target.value))}
-              className="w-full h-8 text-xs mt-1 rounded-md border border-input bg-card px-2"
-            >
-              <option value="">بدون</option>
-              {DAY_NAMES.map((name, i) => (
-                <option key={i} value={i}>{name}</option>
-              ))}
-            </select>
-          </div>
-
-          {restDay !== null && restShiftCodes.length > 0 && (
-            <div>
-              <Label className="text-xs">رمز الراحة</Label>
-              <select
-                value={restCode}
-                onChange={e => setRestCode(e.target.value)}
-                className="w-full h-8 text-xs mt-1 rounded-md border border-input bg-card px-2"
-              >
-                {restShiftCodes.map(c => (
-                  <option key={c} value={c}>{c} - {shifts[c].label}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <Checkbox checked={fair} onCheckedChange={(v) => setFair(!!v)} />
