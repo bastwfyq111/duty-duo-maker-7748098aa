@@ -85,7 +85,7 @@ export function getShiftCellStyle(color?: string): React.CSSProperties {
   return {  
     ...base,  
     backgroundColor: `hsla(${c}, 0.18)`,  
-    color: getContrastingTextColor(color),  
+    color: `hsl(${c})`, // نص بلون الوردية نفسه (داكن وواضح فوق الخلفية الفاتحة)  
   };  
 }  
   
