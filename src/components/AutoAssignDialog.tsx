@@ -1,270 +1,270 @@
-import { useState, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import type { Employee } from "@/hooks/useRosterData";
-import type { ShiftType } from "@/lib/roster";
-import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";
-
-interface AutoAssignDialogProps {
-  open: boolean;
-  onClose: () => void;
-  employees: Employee[];
-  shifts: Record<string, ShiftType>;
-  month: number;
-  year: number;
-  onApply: (next: Employee[]) => void;
-}
-
-export default function AutoAssignDialog({
-  open, onClose, employees, shifts, month, year, onApply,
-}: AutoAssignDialogProps) {
-  const allShiftCodes = useMemo(() => Object.keys(shifts), [shifts]);
-  const workingShiftCodes = useMemo(
-    () => Object.keys(shifts).filter(c => (shifts[c]?.hours ?? 0) > 0),
-    [shifts]
-  );
-
-  const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
-  const [maxHours, setMaxHours] = useState(180);
-  const [maxConsecutive, setMaxConsecutive] = useState(6);
-  const [minStaff, setMinStaff] = useState<Record<string, number>>(() => {
-    const r: Record<string, number> = {};
-    workingShiftCodes.forEach(c => { r[c] = 1; });
-    return r;
-  });
-  const [fair, setFair] = useState(true);
-  const [weightHours, setWeightHours] = useState(5);
-  const [weightWorkUnits, setWeightWorkUnits] = useState(2);
-  const [override, setOverride] = useState(false);
-  const [diverseShifts, setDiverseShifts] = useState(true); // ✨ جديد
-  const [safeSequences, setSafeSequences] = useState(true); // ✨ منع الصباح بعد الليل
-  const [maxConsecutiveNights, setMaxConsecutiveNights] = useState(2);
-
-  const [preview, setPreview] = useState<Employee[] | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [stats, setStats] = useState<AutoAssignStats | null>(null);
-
-  const toggleShift = (code: string) => {
-    setSelectedShifts(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
-  };
-
-  const handleGenerate = () => {
-    const constraints: AutoAssignConstraints = {
-      shiftCodes: selectedShifts,
-      maxMonthlyHours: maxHours,
-      maxConsecutiveDays: maxConsecutive,
-      weeklyRestDayOfWeek: null,
-      minStaffPerShift: minStaff,
-      fairDistribution: fair,
-      overrideExisting: override,
-      diverseShifts: diverseShifts, // ✨ جديد
-      safeSequences,
-      maxConsecutiveNights,
-      weightHours,
-      weightWorkUnits,
-    };
-    const result = autoAssign(employees, shifts, year, month, constraints);
-    setPreview(result.employees);
-    setWarnings(result.warnings);
-    setStats(result.stats ?? null);
-  };
-
-  const handleApply = () => {
-    if (preview) {
-      onApply(preview);
-      setPreview(null);
-      setWarnings([]);
-      setStats(null);
-      onClose();
-    }
-  };
-
-  const handleClose = () => {
-    setPreview(null);
-    setWarnings([]);
-    setStats(null);
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-right">التوزيع التلقائي للورديات</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3 text-right">
-          {/* Shifts to distribute */}
-          <div>
-            <Label className="text-xs">الورديات المراد توزيعها</Label>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              {allShiftCodes.map(code => {
-                const isRest = (shifts[code]?.hours ?? 0) === 0;
-                return (
-                  <label key={code} className={`inline-flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded ${isRest ? "bg-accent/40 border border-accent" : "bg-muted/50"}`}>
-                    <Checkbox
-                      checked={selectedShifts.includes(code)}
-                      onCheckedChange={() => toggleShift(code)}
-                    />
-                    {code} ({shifts[code].hours}س){isRest && " · راحة"}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Min staff per shift */}
-          {selectedShifts.length > 0 && (
-            <div>
-              <Label className="text-xs">الحد الأدنى لكل وردية يومياً</Label>
-              <div className="grid grid-cols-2 gap-2 mt-1.5">
-                {selectedShifts.map(code => (
-                  <div key={code} className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium w-12">{code}:</span>
-                    <Input
-                      type="number" min={0} className="h-8 text-xs"
-                      value={minStaff[code] ?? 0}
-                      onChange={e => setMinStaff({ ...minStaff, [code]: Number(e.target.value) })}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <Label className="text-xs">الحد الأقصى للساعات الشهرية لكل موظف</Label>
-            <Input type="number" className="h-8 text-xs mt-1" value={maxHours}
-              onChange={e => setMaxHours(Number(e.target.value))} />
-          </div>
-
-          <div>
-            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>
-            <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
-              onChange={e => setMaxConsecutive(Number(e.target.value))} />
-          </div>
-
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox checked={fair} onCheckedChange={(v) => setFair(!!v)} />
-            توزيع عادل (موازنة الساعات بين الموظفين)
-          </label>
-
-          {fair && (
-            <div className="bg-muted/40 border border-border rounded p-2 space-y-2">
-              <div className="text-[0.7rem] font-semibold">معايير العدالة (الأوزان)</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-[0.7rem]">وزن ساعات العمل</Label>
-                  <Input
-                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"
-                    value={weightHours}
-                    onChange={e => setWeightHours(Math.max(0, Number(e.target.value) || 0))}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[0.7rem]">وزن عدد الورديات</Label>
-                  <Input
-                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"
-                    value={weightWorkUnits}
-                    onChange={e => setWeightWorkUnits(Math.max(0, Number(e.target.value) || 0))}
-                  />
-                </div>
-              </div>
-              <p className="text-[0.65rem] text-muted-foreground">
-                كلما زاد الوزن زادت أهمية موازنة هذا المعيار بين الموظفين عند التوزيع.
-              </p>
-            </div>
-          )}
-
-          {/* ✨ جديد: خيار تنوع الورديات */}
-          <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/20 rounded p-2">
-            <Checkbox checked={diverseShifts} onCheckedChange={(v) => setDiverseShifts(!!v)} />
-            <div className="flex flex-col">
-              <span className="font-semibold">✨ تنوع الورديات</span>
-              <span className="text-[0.7rem] text-muted-foreground">كل موظف يحصل على جميع الورديات خلال الشهر</span>
-            </div>
-          </label>
-
-          {/* ✨ جديد: تسلسلات آمنة */}
-          <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">
-            <Checkbox checked={safeSequences} onCheckedChange={(v) => setSafeSequences(!!v)} />
-            <div className="flex flex-col flex-1">
-              <span className="font-semibold">🌙 تسلسلات آمنة</span>
-              <span className="text-[0.7rem] text-muted-foreground">منع وردية الصباح مباشرة بعد الليل، وتحديد الليالي المتتالية</span>
-            </div>
-          </label>
-
-          {safeSequences && (
-            <label className="flex items-center gap-2 text-xs pr-8">
-              أقصى عدد ليالي متتالية:
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={maxConsecutiveNights}
-                onChange={(e) => setMaxConsecutiveNights(Math.max(1, Number(e.target.value) || 1))}
-                className="w-14 px-2 py-1 rounded border border-input bg-card text-center"
-              />
-            </label>
-          )}
-
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox checked={override} onCheckedChange={(v) => setOverride(!!v)} />
-            استبدال الخلايا الممتلئة مسبقاً
-          </label>
-
-          {/* Warnings / Preview info */}
-          {warnings.length > 0 && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded p-2 text-[0.7rem] text-destructive max-h-24 overflow-y-auto">
-              <div className="font-semibold mb-1">تنبيهات ({warnings.length}):</div>
-              {warnings.slice(0, 5).map((w, i) => (
-                <div key={i} className="mb-1">
-                  {w.includes("⚠️") ? (
-                    <span className="text-amber-600">{w}</span>
-                  ) : (
-                    <span>• {w}</span>
-                  )}
-                </div>
-              ))}
-              {warnings.length > 5 && <div>… وغيرها</div>}
-            </div>
-          )}
-
-          {preview && (
-            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground space-y-1.5">
-              <div>✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.</div>
-              {stats && (
-                <div className="border-t border-primary/20 pt-1.5">
-                  <div className="font-semibold mb-1">ملخص عدالة الساعات:</div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                    <span>الأعلى: {stats.maxHours} س</span>
-                    <span>الأدنى: {stats.minHours} س</span>
-                    <span>المتوسط: {stats.avgHours} س</span>
-                    <span className={stats.spread <= 12 ? "text-primary font-semibold" : "text-amber-600 font-semibold"}>
-                      الفارق: {stats.spread} س
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleGenerate} className="flex-1 h-9 text-xs">
-              {preview ? "إعادة توليد" : "توليد المعاينة"}
-            </Button>
-            <Button onClick={handleApply} disabled={!preview} className="flex-1 h-9 text-xs" variant="default">
-              تطبيق
-            </Button>
-            <Button onClick={handleClose} variant="outline" className="h-9 text-xs">
-              إلغاء
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+import { useState, useMemo } from "react";  
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";  
+import { Button } from "@/components/ui/button";  
+import { Input } from "@/components/ui/input";  
+import { Label } from "@/components/ui/label";  
+import { Checkbox } from "@/components/ui/checkbox";  
+import type { Employee } from "@/hooks/useRosterData";  
+import type { ShiftType } from "@/lib/roster";  
+import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";  
+  
+interface AutoAssignDialogProps {  
+  open: boolean;  
+  onClose: () => void;  
+  employees: Employee[];  
+  shifts: Record<string, ShiftType>;  
+  month: number;  
+  year: number;  
+  onApply: (next: Employee[]) => void;  
+}  
+  
+export default function AutoAssignDialog({  
+  open, onClose, employees, shifts, month, year, onApply,  
+}: AutoAssignDialogProps) {  
+  const allShiftCodes = useMemo(() => Object.keys(shifts), [shifts]);  
+  const workingShiftCodes = useMemo(  
+    () => Object.keys(shifts).filter(c => (shifts[c]?.hours ?? 0) > 0),  
+    [shifts]  
+  );  
+  
+  const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);  
+  const [maxHours, setMaxHours] = useState(180);  
+  const [maxConsecutive, setMaxConsecutive] = useState(6);  
+  const [minStaff, setMinStaff] = useState<Record<string, number>>(() => {  
+    const r: Record<string, number> = {};  
+    workingShiftCodes.forEach(c => { r[c] = 1; });  
+    return r;  
+  });  
+  const [fair, setFair] = useState(true);  
+  const [weightHours, setWeightHours] = useState(5);  
+  const [weightWorkUnits, setWeightWorkUnits] = useState(2);  
+  const [override, setOverride] = useState(false);  
+  const [diverseShifts, setDiverseShifts] = useState(true); // ✨ جديد  
+  const [safeSequences, setSafeSequences] = useState(true); // ✨ منع الصباح بعد الليل  
+  const [maxConsecutiveNights, setMaxConsecutiveNights] = useState(2);  
+  
+  const [preview, setPreview] = useState<Employee[] | null>(null);  
+  const [warnings, setWarnings] = useState<string[]>([]);  
+  const [stats, setStats] = useState<AutoAssignStats | null>(null);  
+  
+  const toggleShift = (code: string) => {  
+    setSelectedShifts(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);  
+  };  
+  
+  const handleGenerate = () => {  
+    const constraints: AutoAssignConstraints = {  
+      shiftCodes: selectedShifts,  
+      maxMonthlyHours: maxHours,  
+      maxConsecutiveDays: maxConsecutive,  
+      weeklyRestDayOfWeek: null,  
+      minStaffPerShift: minStaff,  
+      fairDistribution: fair,  
+      overrideExisting: override,  
+      diverseShifts: diverseShifts, // ✨ جديد  
+      safeSequences,  
+      maxConsecutiveNights,  
+      weightHours,  
+      weightWorkUnits,  
+    };  
+    const result = autoAssign(employees, shifts, year, month, constraints);  
+    setPreview(result.employees);  
+    setWarnings(result.warnings);  
+    setStats(result.stats ?? null);  
+  };  
+  
+  const handleApply = () => {  
+    if (preview) {  
+      onApply(preview);  
+      setPreview(null);  
+      setWarnings([]);  
+      setStats(null);  
+      onClose();  
+    }  
+  };  
+  
+  const handleClose = () => {  
+    setPreview(null);  
+    setWarnings([]);  
+    setStats(null);  
+    onClose();  
+  };  
+  
+  return (  
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>  
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">  
+        <DialogHeader>  
+          <DialogTitle className="text-right">التوزيع التلقائي للورديات</DialogTitle>  
+        </DialogHeader>  
+  
+        <div className="space-y-3 text-right">  
+          {/* Shifts to distribute */}  
+          <div>  
+            <Label className="text-xs">الورديات المراد توزيعها</Label>  
+            <div className="flex flex-wrap gap-2 mt-1.5">  
+              {allShiftCodes.map(code => {  
+                const isRest = (shifts[code]?.hours ?? 0) === 0;  
+                return (  
+                  <label key={code} className={`inline-flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded ${isRest ? "bg-accent/40 border border-accent" : "bg-muted/50"}`}>  
+                    <Checkbox  
+                      checked={selectedShifts.includes(code)}  
+                      onCheckedChange={() => toggleShift(code)}  
+                    />  
+                    {code} ({shifts[code]?.hours ?? 0}س){isRest && " · راحة"}  
+                  </label>  
+                );  
+              })}  
+            </div>  
+          </div>  
+  
+          {/* Min staff per shift */}  
+          {selectedShifts.length > 0 && (  
+            <div>  
+              <Label className="text-xs">الحد الأدنى لكل وردية يومياً</Label>  
+              <div className="grid grid-cols-2 gap-2 mt-1.5">  
+                {selectedShifts.map(code => (  
+                  <div key={code} className="flex items-center gap-1.5">  
+                    <span className="text-xs font-medium w-12">{code}:</span>  
+                    <Input  
+                      type="number" min={0} className="h-8 text-xs"  
+                      value={minStaff[code] ?? 0}  
+                      onChange={e => setMinStaff({ ...minStaff, [code]: Number(e.target.value) })}  
+                    />  
+                  </div>  
+                ))}  
+              </div>  
+            </div>  
+          )}  
+  
+          <div>  
+            <Label className="text-xs">الحد الأقصى للساعات الشهرية لكل موظف</Label>  
+            <Input type="number" className="h-8 text-xs mt-1" value={maxHours}  
+              onChange={e => setMaxHours(Number(e.target.value))} />  
+          </div>  
+  
+          <div>  
+            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>  
+            <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}  
+              onChange={e => setMaxConsecutive(Number(e.target.value))} />  
+          </div>  
+  
+          <label className="flex items-center gap-2 text-xs cursor-pointer">  
+            <Checkbox checked={fair} onCheckedChange={(v) => setFair(!!v)} />  
+            توزيع عادل (موازنة الساعات بين الموظفين)  
+          </label>  
+  
+          {fair && (  
+            <div className="bg-muted/40 border border-border rounded p-2 space-y-2">  
+              <div className="text-[0.7rem] font-semibold">معايير العدالة (الأوزان)</div>  
+              <div className="grid grid-cols-2 gap-2">  
+                <div>  
+                  <Label className="text-[0.7rem]">وزن ساعات العمل</Label>  
+                  <Input  
+                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"  
+                    value={weightHours}  
+                    onChange={e => setWeightHours(Math.max(0, Number(e.target.value) || 0))}  
+                  />  
+                </div>  
+                <div>  
+                  <Label className="text-[0.7rem]">وزن عدد الورديات</Label>  
+                  <Input  
+                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"  
+                    value={weightWorkUnits}  
+                    onChange={e => setWeightWorkUnits(Math.max(0, Number(e.target.value) || 0))}  
+                  />  
+                </div>  
+              </div>  
+              <p className="text-[0.65rem] text-muted-foreground">  
+                كلما زاد الوزن زادت أهمية موازنة هذا المعيار بين الموظفين عند التوزيع.  
+              </p>  
+            </div>  
+          )}  
+  
+          {/* ✨ جديد: خيار تنوع الورديات */}  
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/20 rounded p-2">  
+            <Checkbox checked={diverseShifts} onCheckedChange={(v) => setDiverseShifts(!!v)} />  
+            <div className="flex flex-col">  
+              <span className="font-semibold">✨ تنوع الورديات</span>  
+              <span className="text-[0.7rem] text-muted-foreground">كل موظف يحصل على جميع الورديات خلال الشهر</span>  
+            </div>  
+          </label>  
+  
+          {/* ✨ جديد: تسلسلات آمنة */}  
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">  
+            <Checkbox checked={safeSequences} onCheckedChange={(v) => setSafeSequences(!!v)} />  
+            <div className="flex flex-col flex-1">  
+              <span className="font-semibold">🌙 تسلسلات آمنة</span>  
+              <span className="text-[0.7rem] text-muted-foreground">منع وردية الصباح مباشرة بعد الليل، وتحديد الليالي المتتالية</span>  
+            </div>  
+          </label>  
+  
+          {safeSequences && (  
+            <label className="flex items-center gap-2 text-xs pr-8">  
+              أقصى عدد ليالي متتالية:  
+              <input  
+                type="number"  
+                min={1}  
+                max={5}  
+                value={maxConsecutiveNights}  
+                onChange={(e) => setMaxConsecutiveNights(Math.max(1, Number(e.target.value) || 1))}  
+                className="w-14 px-2 py-1 rounded border border-input bg-card text-center"  
+              />  
+            </label>  
+          )}  
+  
+          <label className="flex items-center gap-2 text-xs cursor-pointer">  
+            <Checkbox checked={override} onCheckedChange={(v) => setOverride(!!v)} />  
+            استبدال الخلايا الممتلئة مسبقاً  
+          </label>  
+  
+          {/* Warnings / Preview info */}  
+          {warnings.length > 0 && (  
+            <div className="bg-destructive/10 border border-destructive/30 rounded p-2 text-[0.7rem] text-destructive max-h-24 overflow-y-auto">  
+              <div className="font-semibold mb-1">تنبيهات ({warnings.length}):</div>  
+              {warnings.slice(0, 5).map((w, i) => (  
+                <div key={i} className="mb-1">  
+                  {w.includes("⚠️") ? (  
+                    <span className="text-amber-600">{w}</span>  
+                  ) : (  
+                    <span>• {w}</span>  
+                  )}  
+                </div>  
+              ))}  
+              {warnings.length > 5 && <div>… وغيرها</div>}  
+            </div>  
+          )}  
+  
+          {preview && (  
+            <div className="bg-primary/10 border border-primary/30 rounded p-2 text-[0.7rem] text-foreground space-y-1.5">  
+              <div>✓ تم توليد الجدول. اضغط "تطبيق" لحفظ التوزيع.</div>  
+              {stats && (  
+                <div className="border-t border-primary/20 pt-1.5">  
+                  <div className="font-semibold mb-1">ملخص عدالة الساعات:</div>  
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">  
+                    <span>الأعلى: {stats.maxHours} س</span>  
+                    <span>الأدنى: {stats.minHours} س</span>  
+                    <span>المتوسط: {stats.avgHours} س</span>  
+                    <span className={stats.spread <= 12 ? "text-primary font-semibold" : "text-amber-600 font-semibold"}>  
+                      الفارق: {stats.spread} س  
+                    </span>  
+                  </div>  
+                </div>  
+              )}  
+            </div>  
+          )}  
+  
+          <div className="flex gap-2 pt-2">  
+            <Button onClick={handleGenerate} className="flex-1 h-9 text-xs">  
+              {preview ? "إعادة توليد" : "توليد المعاينة"}  
+            </Button>  
+            <Button onClick={handleApply} disabled={!preview} className="flex-1 h-9 text-xs" variant="default">  
+              تطبيق  
+            </Button>  
+            <Button onClick={handleClose} variant="outline" className="h-9 text-xs">  
+              إلغاء  
+            </Button>  
+          </div>  
+        </div>  
+      </DialogContent>  
+    </Dialog>  
+  );  
 }
