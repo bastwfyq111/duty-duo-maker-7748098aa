@@ -43,6 +43,14 @@ export default function AutoAssignDialog({
   const [safeSequences, setSafeSequences] = useState(true); // ✨ منع الصباح بعد الليل  
   const [maxConsecutiveNights, setMaxConsecutiveNights] = useState(2);  
   
+  // ✨ جديد: الوضع الأفقي — عدد أيام كل وردية لكل موظف  
+  const [horizontalPattern, setHorizontalPattern] = useState(false);  
+  const [daysPerShift, setDaysPerShift] = useState<Record<string, number>>(() => {  
+    const r: Record<string, number> = {};  
+    allShiftCodes.forEach(c => { r[c] = 1; });  
+    return r;  
+  });  
+  
   const [preview, setPreview] = useState<Employee[] | null>(null);  
   const [warnings, setWarnings] = useState<string[]>([]);  
   const [stats, setStats] = useState<AutoAssignStats | null>(null);  
@@ -65,6 +73,8 @@ export default function AutoAssignDialog({
       maxConsecutiveNights,  
       weightHours,  
       weightWorkUnits,  
+      horizontalPattern,   // ✨ جديد  
+      daysPerShift,        // ✨ جديد  
     };  
     const result = autoAssign(employees, shifts, year, month, constraints);  
     setPreview(result.employees);  
@@ -116,8 +126,41 @@ export default function AutoAssignDialog({
             </div>  
           </div>  
   
-          {/* Min staff per shift */}  
-          {selectedShifts.length > 0 && (  
+          {/* ✨ جديد: خيار التوزيع الأفقي */}  
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-secondary/20 border border-secondary/40 rounded p-2">  
+            <Checkbox checked={horizontalPattern} onCheckedChange={(v) => setHorizontalPattern(!!v)} />  
+            <div className="flex flex-col flex-1">  
+              <span className="font-semibold">↔️ التوزيع الأفقي لكل موظف</span>  
+              <span className="text-[0.7rem] text-muted-foreground">  
+                نمط ثابت لكل موظف: عدد أيام محدد لكل وردية يتكرّر طوال الشهر (مع إزاحة بين الموظفين)  
+              </span>  
+            </div>  
+          </label>  
+  
+          {/* ✨ جديد: حقول عدد الأيام لكل وردية (تظهر فقط في الوضع الأفقي) */}  
+          {horizontalPattern && selectedShifts.length > 0 && (  
+            <div className="bg-secondary/10 border border-secondary/30 rounded p-2">  
+              <Label className="text-xs">عدد الأيام لكل وردية (لكل موظف)</Label>  
+              <div className="grid grid-cols-2 gap-2 mt-1.5">  
+                {selectedShifts.map(code => (  
+                  <div key={code} className="flex items-center gap-1.5">  
+                    <span className="text-xs font-medium w-12">{code}:</span>  
+                    <Input  
+                      type="number" min={0} className="h-8 text-xs"  
+                      value={daysPerShift[code] ?? 0}  
+                      onChange={e => setDaysPerShift({ ...daysPerShift, [code]: Number(e.target.value) })}  
+                    />  
+                  </div>  
+                ))}  
+              </div>  
+              <p className="text-[0.65rem] text-muted-foreground mt-1.5">  
+                مثال: 3 أيام D ثم 3 أيام M ثم يوم N ثم يوم R، ويتكرّر النمط.  
+              </p>  
+            </div>  
+          )}  
+  
+          {/* Min staff per shift — يُخفى في الوضع الأفقي */}  
+          {!horizontalPattern && selectedShifts.length > 0 && (  
             <div>  
               <Label className="text-xs">الحد الأدنى لكل وردية يومياً</Label>  
               <div className="grid grid-cols-2 gap-2 mt-1.5">  
@@ -147,12 +190,15 @@ export default function AutoAssignDialog({
               onChange={e => setMaxConsecutive(Number(e.target.value))} />  
           </div>  
   
-          <label className="flex items-center gap-2 text-xs cursor-pointer">  
-            <Checkbox checked={fair} onCheckedChange={(v) => setFair(!!v)} />  
-            توزيع عادل (موازنة الساعات بين الموظفين)  
-          </label>  
+          {/* توزيع عادل — يُخفى في الوضع الأفقي */}  
+          {!horizontalPattern && (  
+            <label className="flex items-center gap-2 text-xs cursor-pointer">  
+              <Checkbox checked={fair} onCheckedChange={(v) => setFair(!!v)} />  
+              توزيع عادل (موازنة الساعات بين الموظفين)  
+            </label>  
+          )}  
   
-          {fair && (  
+          {!horizontalPattern && fair && (  
             <div className="bg-muted/40 border border-border rounded p-2 space-y-2">  
               <div className="text-[0.7rem] font-semibold">معايير العدالة (الأوزان)</div>  
               <div className="grid grid-cols-2 gap-2">  
@@ -179,25 +225,29 @@ export default function AutoAssignDialog({
             </div>  
           )}  
   
-          {/* ✨ جديد: خيار تنوع الورديات */}  
-          <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/20 rounded p-2">  
-            <Checkbox checked={diverseShifts} onCheckedChange={(v) => setDiverseShifts(!!v)} />  
-            <div className="flex flex-col">  
-              <span className="font-semibold">✨ تنوع الورديات</span>  
-              <span className="text-[0.7rem] text-muted-foreground">كل موظف يحصل على جميع الورديات خلال الشهر</span>  
-            </div>  
-          </label>  
+          {/* ✨ خيار تنوع الورديات — يُخفى في الوضع الأفقي */}  
+          {!horizontalPattern && (  
+            <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/20 rounded p-2">  
+              <Checkbox checked={diverseShifts} onCheckedChange={(v) => setDiverseShifts(!!v)} />  
+              <div className="flex flex-col">  
+                <span className="font-semibold">✨ تنوع الورديات</span>  
+                <span className="text-[0.7rem] text-muted-foreground">كل موظف يحصل على جميع الورديات خلال الشهر</span>  
+              </div>  
+            </label>  
+          )}  
   
-          {/* ✨ جديد: تسلسلات آمنة */}  
-          <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">  
-            <Checkbox checked={safeSequences} onCheckedChange={(v) => setSafeSequences(!!v)} />  
-            <div className="flex flex-col flex-1">  
-              <span className="font-semibold">🌙 تسلسلات آمنة</span>  
-              <span className="text-[0.7rem] text-muted-foreground">منع وردية الصباح مباشرة بعد الليل، وتحديد الليالي المتتالية</span>  
-            </div>  
-          </label>  
+          {/* ✨ تسلسلات آمنة — يُخفى في الوضع الأفقي */}  
+          {!horizontalPattern && (  
+            <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">  
+              <Checkbox checked={safeSequences} onCheckedChange={(v) => setSafeSequences(!!v)} />  
+              <div className="flex flex-col flex-1">  
+                <span className="font-semibold">🌙 تسلسلات آمنة</span>  
+                <span className="text-[0.7rem] text-muted-foreground">منع وردية الصباح مباشرة بعد الليل، وتحديد الليالي المتتالية</span>  
+              </div>  
+            </label>  
+          )}  
   
-          {safeSequences && (  
+          {!horizontalPattern && safeSequences && (  
             <label className="flex items-center gap-2 text-xs pr-8">  
               أقصى عدد ليالي متتالية:  
               <input  
