@@ -13,6 +13,9 @@ export interface AutoAssignConstraints {
   diverseShifts?: boolean;                    // ✨ تنوع الورديات لكل موظف
   safeSequences?: boolean;                    // ✨ منع الصباح بعد الليل، وتقييد الليالي المتتالية
   maxConsecutiveNights?: number;              // افتراضي 2
+  // أوزان العدالة القابلة للتخصيص
+  weightHours?: number;                        // أهمية موازنة الساعات (افتراضي 5)
+  weightWorkUnits?: number;                    // أهمية موازنة عدد الورديات (افتراضي 2)
 }
 
 /** Detect night-shift code by convention (code starts with N or label mentions "ليل"). */
@@ -73,11 +76,22 @@ function getEmployeeShifts(emp: Employee): Set<string> {
 }
 
 /** Score a candidate for assignment: lower is better */
-function candidateScore(i: number, hoursPerEmp: number[], workUnits: number[], consecutive: number[], lastShift: string, code: string) {
+function candidateScore(
+  i: number,
+  hoursPerEmp: number[],
+  workUnits: number[],
+  consecutive: number[],
+  lastShift: string,
+  code: string,
+  c: AutoAssignConstraints
+) {
+  const wHours = c.weightHours ?? 5;
+  const wUnits = c.weightWorkUnits ?? 2;
   // base: current hours (prefer lower) — primary fairness signal
-  let score = hoursPerEmp[i];
+  let score = hoursPerEmp[i] * wHours;
   // secondary: prefer employees with fewer assigned working slots (balance count too)
-  score += workUnits[i] * 2;
+  // multiplier keeps unit weight meaningful against the much larger hours values
+  score += workUnits[i] * (wUnits * 5);
   // penalize long consecutive streaks
   score += consecutive[i] * 3;
   // penalize if lastShift equals code to encourage diversity
@@ -203,8 +217,8 @@ export function autoAssign(
 
       // Sort by a combined score (lower better): hours, work units, consecutive, and lastShift preference
       candidates.sort((a, b) => {
-        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code);
-        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code);
+        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code, c);
+        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code, c);
         return as - bs;
       });
 
