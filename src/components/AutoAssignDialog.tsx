@@ -189,6 +189,33 @@ export default function AutoAssignDialog({
             توزيع عادل (موازنة الساعات بين الموظفين)
           </label>
 
+          {fair && (
+            <div className="bg-muted/40 border border-border rounded p-2 space-y-2">
+              <div className="text-[0.7rem] font-semibold">معايير العدالة (الأوزان)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[0.7rem]">وزن ساعات العمل</Label>
+                  <Input
+                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"
+                    value={weightHours}
+                    onChange={e => setWeightHours(Math.max(0, Number(e.target.value) || 0))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[0.7rem]">وزن عدد الورديات</Label>
+                  <Input
+                    type="number" min={0} max={10} step={1} className="h-8 text-xs mt-1"
+                    value={weightWorkUnits}
+                    onChange={e => setWeightWorkUnits(Math.max(0, Number(e.target.value) || 0))}
+                  />
+                </div>
+              </div>
+              <p className="text-[0.65rem] text-muted-foreground">
+                كلما زاد الوزن زادت أهمية موازنة هذا المعيار بين الموظفين عند التوزيع.
+              </p>
+            </div>
+          )}
+
           {/* ✨ جديد: خيار تنوع الورديات */}
           <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/20 rounded p-2">
             <Checkbox checked={diverseShifts} onCheckedChange={(v) => setDiverseShifts(!!v)} />
