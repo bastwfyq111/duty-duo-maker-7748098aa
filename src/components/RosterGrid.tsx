@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";  
+import { useMemo, useState } from "react";  
 import { getDaysArray, getDayName, isFriday, calcTotalHours, type ShiftType } from "@/lib/roster";  
 import { getShiftCellStyle } from "@/lib/color-utils";  
 import type { Employee } from "@/hooks/useRosterData";  
-import { Button } from "@/components/ui/button";  
   
 interface RosterGridProps {  
   employees: Employee[];  
@@ -17,41 +16,12 @@ interface RosterGridProps {
   onSplitCell?: (empIdx: number, day: number) => void;  
 }  
   
-type SchedulerSettings = {  
-  minRestHours: number;  
-  maxConsecutiveDays: number;  
-  maxDailyShiftsPerEmployee: number;  
-};  
-  
-const SETTINGS_KEY = "schedulerSettings";  
-  
 export default function RosterGrid({   
   employees: propEmployees, shifts: propShifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell   
 }: RosterGridProps) {  
   const days = useMemo(() => getDaysArray(year, month), [year, month]);  
   const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());  
   const [contextMenu, setContextMenu] = useState<{ empIdx: number; day: number; x: number; y: number } | null>(null);  
-  
-  // scheduler settings stored locally  
-  const [settingsOpen, setSettingsOpen] = useState(false);  
-  const [settings, setSettings] = useState<SchedulerSettings>({ minRestHours: 12, maxConsecutiveDays: 5, maxDailyShiftsPerEmployee: 1 });  
-  
-  useEffect(() => {  
-    try {  
-      const raw = localStorage.getItem(SETTINGS_KEY);  
-      if (raw) {  
-        const parsed = JSON.parse(raw);  
-        setSettings(prev => ({ ...prev, ...parsed }));  
-      }  
-    } catch (e) {  
-      // ignore  
-    }  
-  }, []);  
-  
-  const saveSettings = (s: SchedulerSettings) => {  
-    setSettings(s);  
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }  
-  };  
   
   const isMerged = (empIdx: number, day: number): boolean => {  
     return mergedCells.has(`${empIdx}-${day}`);  
@@ -95,49 +65,6 @@ export default function RosterGrid({
   
   return (  
     <div dir="rtl" className="table-wrapper overflow-x-auto -webkit-overflow-scrolling-touch mt-4 rounded-xl border border-border bg-card">  
-      <div className="flex items-center justify-between gap-2 p-2">  
-        <div className="flex items-center gap-2">  
-          <Button size="sm" onClick={() => setSettingsOpen(s => !s)} variant="ghost">  
-            ⚙️ إعدادات  
-          </Button>  
-        </div>  
-        <div className="text-xs text-muted-foreground">ملحوظة: التعديلات تُطبّق فوراً على التخزين المحلي</div>  
-      </div>  
-  
-      {settingsOpen && (  
-        <div className="p-3 border-t border-border bg-muted/30">  
-          <div className="flex gap-4 flex-wrap items-center">  
-            <label className="text-xs">Min rest hours:  
-              <input  
-                type="number"  
-                className="ml-2 w-20 text-xs"  
-                value={settings.minRestHours}  
-                onChange={(e) => setSettings({ ...settings, minRestHours: Math.max(0, Number(e.target.value)) })}  
-              />  
-            </label>  
-            <label className="text-xs">Max consecutive days:  
-              <input  
-                type="number"  
-                className="ml-2 w-20 text-xs"  
-                value={settings.maxConsecutiveDays}  
-                onChange={(e) => setSettings({ ...settings, maxConsecutiveDays: Math.max(1, Number(e.target.value)) })}  
-              />  
-            </label>  
-            <label className="text-xs">Max daily shifts per employee:  
-              <input  
-                type="number"  
-                className="ml-2 w-20 text-xs"  
-                value={settings.maxDailyShiftsPerEmployee}  
-                onChange={(e) => setSettings({ ...settings, maxDailyShiftsPerEmployee: Math.max(1, Number(e.target.value)) })}  
-              />  
-            </label>  
-            <div className="ml-2">  
-              <Button size="sm" onClick={() => saveSettings(settings)}>حفظ الإعدادات</Button>  
-            </div>  
-          </div>  
-        </div>  
-      )}  
-  
       <table id="rosterTable" className="roster-table" dir="rtl">  
         <thead>  
           <tr className="bg-foreground text-background">  
@@ -175,7 +102,7 @@ export default function RosterGrid({
                     <select  
                       value={empIdx}  
                       onChange={(e) => onSwapEmployee?.(empIdx, Number(e.target.value))}  
-                      className="w-full max-w-[110px] text-xs font-semibold bg-transparent border border-border rounded px-1 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-primary [...]"  
+                      className="w-full max-w-[110px] text-xs font-semibold bg-transparent border border-border rounded px-1 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-primary"  
                       title="تبديل الموقع مع موظف آخر"  
                     >  
                       {propEmployees.map((e, i) => (  
@@ -237,7 +164,7 @@ export default function RosterGrid({
                             return (  
                               <div  
                                 key={idx}  
-                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all [...]`}  
+                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all`}  
                                 style={val ? getShiftCellStyle(shift?.color) : undefined}  
                                 onClick={() => handleCellClickWithContext(empIdx, d, idx + 1)}  
                                 onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
