@@ -56,6 +56,7 @@ export default function AutoAssignDialog({
       shiftCodes: selectedShifts,
       maxMonthlyHours: maxHours,
       maxConsecutiveDays: maxConsecutive,
+      weeklyRestDayOfWeek: null,
       minStaffPerShift: minStaff,
       fairDistribution: fair,
       overrideExisting: override,
@@ -92,7 +93,7 @@ export default function AutoAssignDialog({
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-right">التو��يع التلقائي للورديات</DialogTitle>
+          <DialogTitle className="text-right">التوزيع التلقائي للورديات</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 text-right">
@@ -141,7 +142,7 @@ export default function AutoAssignDialog({
           </div>
 
           <div>
-            <Label className="text-xs">الحد ��لأقصى لأيام العمل المتتالية</Label>
+            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>
             <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
               onChange={e => setMaxConsecutive(Number(e.target.value))} />
           </div>
