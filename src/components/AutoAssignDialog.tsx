@@ -71,6 +71,8 @@ export default function AutoAssignDialog({
       diverseShifts: diverseShifts, // ✨ جديد
       safeSequences,
       maxConsecutiveNights,
+      weightHours,
+      weightWorkUnits,
     };
     const result = autoAssign(employees, shifts, year, month, constraints);
     setPreview(result.employees);
