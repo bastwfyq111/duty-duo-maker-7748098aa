@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getDaysArray, getDayName, isFriday, calcTotalHours, type ShiftType } from "@/lib/roster";
-import { getShiftCellStyle, generateDistinctHslColors } from "@/lib/color-utils";
-import { computeAutoSchedule } from "@/lib/scheduler";
+import { getShiftCellStyle } from "@/lib/color-utils";
 import type { Employee } from "@/hooks/useRosterData";
-import { useRosterData } from "@/hooks/useRosterData";
 import { Button } from "@/components/ui/button";
 
 interface RosterGridProps {
@@ -33,16 +31,10 @@ export default function RosterGrid({
   const days = useMemo(() => getDaysArray(year, month), [year, month]);
   const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ empIdx: number; day: number; x: number; y: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { bulkSetShifts, addShiftType } = useRosterData();
 
   // scheduler settings stored locally
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<SchedulerSettings>({ minRestHours: 12, maxConsecutiveDays: 5, maxDailyShiftsPerEmployee: 1 });
-
-  // preview modal state and undo snapshot
-  const [previewSchedule, setPreviewSchedule] = useState<any | null>(null);
-  const [lastSnapshot, setLastSnapshot] = useState<Employee[] | null>(null);
 
   useEffect(() => {
     try {
@@ -101,104 +93,13 @@ export default function RosterGrid({
     }
   };
 
-  // ----- New actions: generate color palette, auto-schedule with preview, undo -----
-  const handleGenerateColors = async () => {
-    try {
-      setBusy(true);
-      const codes = Object.keys(propShifts);
-      const count = Math.max(12, codes.length);
-      const palette = generateDistinctHslColors(count, { saturation: 85, lightness: 50, lightnessVariance: 8 });
-      codes.forEach((code, i) => {
-        const base = propShifts[code] || { hours: 0, label: code };
-        // assign a color from palette
-        addShiftType(code, { ...base, color: palette[i % palette.length] });
-      });
-      // small delay to ensure storage updated
-      await new Promise(res => setTimeout(res, 120));
-      console.log("Generated and applied palette for shift codes", codes);
-    } catch (err) {
-      console.error("Failed to generate colors", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleAutoSchedule = async () => {
-    try {
-      setBusy(true);
-      // prepare employees snapshot from props
-      const emps = propEmployees.map(e => ({ name: e.name, attendance: { ...(e.attendance || {}) } }));
-      const opts = {
-        employees: emps,
-        shifts: propShifts,
-        month,
-        year,
-        slotsPerDay,
-        constraints: { minRestHours: settings.minRestHours, maxConsecutiveDays: settings.maxConsecutiveDays, maxDailyShiftsPerEmployee: settings.maxDailyShiftsPerEmployee }
-      };
-      const res = computeAutoSchedule(opts as any);
-      if (res.success) {
-        // show preview modal instead of applying immediately
-        setPreviewSchedule(res);
-      } else {
-        // still show details so user knows why
-        setPreviewSchedule(res);
-      }
-    } catch (err) {
-      console.error("Auto-schedule error", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const applyPreview = async () => {
-    if (!previewSchedule) return;
-    try {
-      setBusy(true);
-      // keep undo snapshot
-      setLastSnapshot(propEmployees.map(e => ({ ...e, attendance: { ...(e.attendance || {}) } })));
-      await bulkSetShifts(previewSchedule.employees as Employee[]);
-      setPreviewSchedule(null);
-    } catch (err) {
-      console.error("Failed applying schedule", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cancelPreview = () => setPreviewSchedule(null);
-
-  const undoLast = async () => {
-    if (!lastSnapshot) return;
-    try {
-      setBusy(true);
-      await bulkSetShifts(lastSnapshot);
-      setLastSnapshot(null);
-    } catch (err) {
-      console.error("Undo failed", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div dir="rtl" className="table-wrapper overflow-x-auto -webkit-overflow-scrolling-touch mt-4 rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between gap-2 p-2">
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={handleGenerateColors} disabled={busy}>
-            توليد ألوان تلقائية
-          </Button>
-          <Button size="sm" onClick={handleAutoSchedule} variant="secondary" disabled={busy}>
-            توزيع تلقائي للورديات
-          </Button>
           <Button size="sm" onClick={() => setSettingsOpen(s => !s)} variant="ghost">
             ⚙️ إعدادات
           </Button>
-          {lastSnapshot && (
-            <Button size="sm" onClick={undoLast} variant="destructive" disabled={busy}>
-              تراجع عن آخر تغييرات
-            </Button>
-          )}
         </div>
         <div className="text-xs text-muted-foreground">ملحوظة: التعديلات تُطبّق فوراً على التخزين المحلي</div>
       </div>
@@ -311,7 +212,7 @@ export default function RosterGrid({
                       onContextMenu={(e) => handleContextMenu(e, empIdx, d)}
                     >
                       {merged ? (
-                        // خلي�� مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة
+                        // خلية مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة
                         <div
                           className="flex h-[56px] w-full items-center justify-center cursor-pointer transition-all duration-150 hover:ring-2 hover:ring-inset hover:ring-primary active:scale-95"
                           style={slotValues[0] ? getShiftCellStyle(shiftFor(slotValues[0])?.color) : undefined}
@@ -336,7 +237,7 @@ export default function RosterGrid({
                             return (
                               <div
                                 key={idx}
-                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all [...]`}
+                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all [...]`
                                 style={val ? getShiftCellStyle(shift?.color) : undefined}
                                 onClick={() => handleCellClickWithContext(empIdx, d, idx + 1)}
                                 onContextMenu={(e) => handleContextMenu(e, empIdx, d)}
@@ -396,49 +297,6 @@ export default function RosterGrid({
                 دمج الخليتين 🔗
               </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Preview Modal for schedule */}
-      {previewSchedule && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl bg-card border border-border rounded-lg p-4">
-            <h3 className="text-sm font-bold mb-2">معاينة الجدول التلقائي</h3>
-            <div className="text-xs text-muted-foreground mb-3">تفاصيل التغييرات المعروضة لن تُحفظ حتى تضغط "تطبيق".</div>
-
-            <div className="overflow-auto max-h-72 border rounded p-2 bg-muted">
-              {previewSchedule.details?.violations && previewSchedule.details.violations.length > 0 && (
-                <div className="text-sm text-destructive mb-2">انتهاكات: {previewSchedule.details.violations.join(", ")}</div>
-              )}
-
-              <table className="w-full text-xs">
-                <thead>
-                  <tr>
-                    <th className="text-left">الموظف</th>
-                    <th className="text-left">نمط الحضور (مقتطف)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewSchedule.employees.map((e: any, i: number) => (
-                    <tr key={i} className="border-t">
-                      <td className="py-1">{e.name}</td>
-                      <td className="py-1">
-                        {/* show up to first 6 assigned slots */}
-                        {Object.entries(e.attendance || {}).slice(0, 6).map(([k, v]: any, idx: number) => (
-                          <span key={idx} className="inline-block px-1 py-0.5 mr-1 rounded bg-accent/20">{k}: {v}</span>
-                        ))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex gap-2 justify-end mt-4">
-              <Button size="sm" onClick={cancelPreview} variant="ghost">إلغاء</Button>
-              <Button size="sm" onClick={applyPreview} disabled={busy}>تطبيق وحفظ</Button>
-            </div>
           </div>
         </div>
       )}
