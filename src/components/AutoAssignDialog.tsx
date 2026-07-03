@@ -43,6 +43,8 @@ export default function AutoAssignDialog({
     return r;
   });
   const [fair, setFair] = useState(true);
+  const [weightHours, setWeightHours] = useState(5);
+  const [weightWorkUnits, setWeightWorkUnits] = useState(2);
   const [override, setOverride] = useState(false);
   const [diverseShifts, setDiverseShifts] = useState(true); // ✨ جديد
   const [safeSequences, setSafeSequences] = useState(true); // ✨ منع الصباح بعد الليل
