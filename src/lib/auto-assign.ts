@@ -217,8 +217,8 @@ export function autoAssign(
 
       // Sort by a combined score (lower better): hours, work units, consecutive, and lastShift preference
       candidates.sort((a, b) => {
-        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code);
-        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code);
+        const as = candidateScore(a.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[a.i], code, c);
+        const bs = candidateScore(b.i, hoursPerEmp, workUnits, consecutive, lastShiftPerEmp[b.i], code, c);
         return as - bs;
       });
 
