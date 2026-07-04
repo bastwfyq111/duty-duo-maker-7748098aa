@@ -132,13 +132,18 @@ export default function RosterGrid({
   
                   const shiftFor = (val: string) => val ? propShifts[val] : undefined;  
   
+                  // دمج تلقائي: إذا كانت خانة واحدة فقط ممتلئة (أو لا شيء) نعرضها كخلية واحدة  
+                  const filledVals = slotValues.filter(v => v);  
+                  const showSingle = merged || filledVals.length <= 1;  
+                  const singleVal = filledVals[0] ?? "";  
+  
                   return (  
                     <td  
                       key={d}  
                       className={`p-0 select-none ${we && slotValues.every(v => !v) ? "weekend-col" : ""}`}  
                       onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
                     >  
-                      {merged ? (  
+                      {showSingle ? (  
                         // خلية مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة  
                         <div  
                           className="flex h-[56px] w-full items-center justify-center cursor-pointer transition-all duration-150 hover:ring-2 hover:ring-inset hover:ring-primary active:scale-95"  
