@@ -14,11 +14,11 @@ export interface ShiftType {
 }
 
 const DEFAULT_SHIFTS: Record<string, ShiftType> = {
-  M: { hours: 6, label: "صباحي", color: "199 89% 48%" },
-  D: { hours: 12, label: "نهاري", color: "38 92% 50%" },
-  N: { hours: 12, label: "ليلي", color: "263 70% 50%" },
-  R: { hours: 0, label: "راحة", color: "142 71% 45%" },
-  OFF: { hours: 0, label: "إجازة", color: "210 20% 50%" },
+  M: { hours: 6, label: "صباحي", color: "204 94% 44%" },   // أزرق سماوي واضح
+  D: { hours: 12, label: "نهاري", color: "28 96% 48%" },   // برتقالي كهرماني واضح
+  N: { hours: 12, label: "ليلي", color: "256 72% 46%" },   // بنفسجي نيلي غامق واضح
+  R: { hours: 0, label: "راحة", color: "150 72% 38%" },    // أخضر واضح
+  OFF: { hours: 0, label: "إجازة", color: "215 16% 47%" }, // رمادي واضح
 };
 
 const SHIFTS_KEY = "rosterShifts";

@@ -99,6 +99,8 @@ function candidateScore(
   score += consecutive[i] * 3;  
   // penalize if lastShift equals code to encourage diversity  
   if (lastShift === code) score += 12;  
+  // deterministic tie-breaker so equal scores resolve consistently  
+  score += i * 0.001;  
   return score;  
 }  
   
@@ -431,8 +433,9 @@ function rebalanceHours(
         const code = getSlot(hiEmp, day, slot);  
         const sh = shifts[code]?.hours ?? 0;  
         if (!code || sh <= 0) continue;  
-        // Only move if it strictly reduces the spread  
-        if (spread <= sh) continue;  
+        // Only move if it strictly reduces the gap between this pair.  
+        // After moving: hi -= sh, lo += sh → new pair gap = |spread - 2*sh|.  
+        if (Math.abs(spread - 2 * sh) >= spread) continue;  
         // lo must not already have this code that day  
         if (getSlot(loEmp, day, 1) === code || getSlot(loEmp, day, 2) === code) continue;  
         // Find a free slot for lo on that day  
@@ -566,14 +569,24 @@ function pickBestShift(
     }  
   }  
   
-  // Fair distribution: choose shift with fewest assignments today  
+  // Fair distribution: choose shift with fewest assignments today.  
+  // Tie-breaks favour (1) not repeating lastShift, then (2) more hours to  
+  // help lift a low-hours employee toward the average.  
   if (c.fairDistribution) {  
     let best = available[0];  
     let bestCount = Infinity;  
+    let bestRepeat = true;  
+    let bestHours = -1;  
     for (const code of available) {  
       let count = 0;  
       employees.forEach(e => { if (getSlot(e, day, 1) === code || getSlot(e, day, 2) === code) count++; });  
-      if (count < bestCount) { bestCount = count; best = code; }  
+      const repeat = code === lastShift;  
+      const hrs = shifts[code]?.hours ?? 0;  
+      const better =  
+        count < bestCount ||  
+        (count === bestCount && !repeat && bestRepeat) ||  
+        (count === bestCount && repeat === bestRepeat && hrs > bestHours);  
+      if (better) { bestCount = count; bestRepeat = repeat; bestHours = hrs; best = code; }  
     }  
     return best;  
   }  
