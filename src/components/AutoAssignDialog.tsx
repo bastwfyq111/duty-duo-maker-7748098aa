@@ -34,6 +34,13 @@ export default function AutoAssignDialog({
   const [safeSequences, setSafeSequences] = useState(true);
   const [maxConsecutiveNights, setMaxConsecutiveNights] = useState(2);
 
+  // New UI state for ordering and fill behavior
+  const [orderingText, setOrderingText] = useState(""); // CSV like: A,B,C
+  const [usePerEmployeeOrdering, setUsePerEmployeeOrdering] = useState(false);
+  const [perEmployeeOrderingText, setPerEmployeeOrderingText] = useState("{}"); // JSON map: { "Name": ["A","B"] }
+  const [fillAllDays, setFillAllDays] = useState(false);
+  const [strictPriority, setStrictPriority] = useState(false);
+
   const [preview, setPreview] = useState<Employee[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [stats, setStats] = useState<AutoAssignStats | null>(null);
@@ -43,6 +50,21 @@ export default function AutoAssignDialog({
   };
 
   const handleGenerate = () => {
+    let ordering: string[] | Record<string, string[]> | undefined = undefined;
+    if (usePerEmployeeOrdering) {
+      try {
+        const parsed = JSON.parse(perEmployeeOrderingText || "{}");
+        // ensure values are arrays of strings
+        const ok = Object.values(parsed).every((v: any) => Array.isArray(v) && v.every((x: any) => typeof x === "string"));
+        if (ok) ordering = parsed;
+        else warnings.push("تنسيق تفضيلات الموظفين غير صحيح — يجب أن تكون قيم المخرجات مصفوفات نصية.");
+      } catch (e) {
+        warnings.push("خطأ في JSON لتفضيلات الموظفين: " + (e as Error).message);
+      }
+    } else if (orderingText.trim().length > 0) {
+      ordering = orderingText.split(",").map(s => s.trim()).filter(Boolean);
+    }
+
     const constraints: AutoAssignConstraints = {
       shiftCodes: selectedShifts,
       maxMonthlyHours: maxHours,
@@ -54,10 +76,14 @@ export default function AutoAssignDialog({
       safeSequences,
       maxConsecutiveNights,
       randomHorizontal: true,        // ✨ التوزيع الأفقي العشوائي هو الوضع الوحيد
+      ordering,
+      fillAllDays,
+      strictPriority,
     };
+
     const result = autoAssign(employees, shifts, year, month, constraints);
     setPreview(result.employees);
-    setWarnings(result.warnings);
+    setWarnings(result.warnings.concat(warnings));
     setStats(result.stats ?? null);
   };
 
@@ -87,7 +113,7 @@ export default function AutoAssignDialog({
 
         <div className="space-y-3 text-right">
           <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
-            ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع. الخلية التي تخالف الشروط تُدمج وتصبح خلية واحدة.
+            ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع. الخلية [...]
           </p>
 
           {/* Shifts to distribute */}
@@ -120,6 +146,38 @@ export default function AutoAssignDialog({
             <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
               onChange={e => setMaxConsecutive(Number(e.target.value))} />
           </div>
+
+          {/* Ordering controls */}
+          <div>
+            <Label className="text-xs">ترتيب تفضيلي عام لأكواد الورديات (بفاصل ,)</Label>
+            <Input type="text" className="h-8 text-xs mt-1" value={orderingText}
+              placeholder="مثال: A,B,C أو N,M" onChange={e => setOrderingText(e.target.value)} />
+            <label className="flex items-center gap-2 text-xs mt-1">
+              <Checkbox checked={usePerEmployeeOrdering} onCheckedChange={(v) => setUsePerEmployeeOrdering(!!v)} />
+              استخدم تفضيلات لكل موظف (JSON)
+            </label>
+            {usePerEmployeeOrdering && (
+              <div className="mt-1">
+                <Label className="text-xs">تفضيلات الموظفين (JSON) — مثال: {`{"أحمد":["N","M"],"ليلى":["M","A"]}`}</Label>
+                <textarea
+                  value={perEmployeeOrderingText}
+                  onChange={(e) => setPerEmployeeOrderingText(e.target.value)}
+                  className="w-full mt-1 text-xs p-2 rounded border border-input bg-card"
+                  rows={4}
+                />
+              </div>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox checked={fillAllDays} onCheckedChange={(v) => setFillAllDays(!!v)} />
+            ملء جميع الأيام (قد يتطلب تجاوز بعض القيود)
+          </label>
+
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox checked={strictPriority} onCheckedChange={(v) => setStrictPriority(!!v)} />
+            تطبيق الترتيب كقيد صارم (لا تراجع)
+          </label>
 
           {/* ✨ تسلسلات آمنة */}
           <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">
