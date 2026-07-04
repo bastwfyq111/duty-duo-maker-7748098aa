@@ -16,9 +16,8 @@ export interface AutoAssignConstraints {
   // أوزان العدالة القابلة للتخصيص  
   weightHours?: number;                        // أهمية موازنة الساعات (افتراضي 5)  
   weightWorkUnits?: number;                    // أهمية موازنة عدد الورديات (افتراضي 2)  
-  // ✨ جديد: التوزيع الأفقي لكل موظف  
-  horizontalPattern?: boolean;                 // تفعيل النمط الأفقي (عدد أيام لكل وردية يتكرر عبر الشهر)  
-  daysPerShift?: Record<string, number>;       // shift code -> عدد الأيام المتتالية في الدورة  
+  // ✨ التوزيع الأفقي العشوائي: يملأ صف كل موظف عشوائياً مع موازنة الساعات  
+  randomHorizontal?: boolean;                  // تفعيل التوزيع الأفقي العشوائي  
 }  
   
 /** Detect night-shift code by convention (code starts with N or label mentions "ليل"). */  
