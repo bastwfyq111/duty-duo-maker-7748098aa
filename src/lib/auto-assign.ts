@@ -104,45 +104,132 @@ function candidateScore(
 }  
   
 /**  
- * ✨ التوزيع الأفقي: لكل موظف تُبنى دورة تسلسلية من الأكواد بحسب عدد الأيام المحدد  
- * لكل وردية (daysPerShift)، ثم تتكرر هذه الدورة على طول أيام الشهر في الخانة الأولى.  
- * تُستخدم إزاحة (offset) مختلفة لكل موظف حتى لا يعمل الجميع نفس الوردية في نفس اليوم.  
+ * ✨ التوزيع الأفقي العشوائي:  
+ * يمرّ على الأيام، ويملأ لكل موظف الخانتين بورديات مختارة عشوائياً من الورديات  
+ * المسموح بها، مع مراعاة الشروط (الحد الأقصى للساعات، أيام العمل المتتالية،  
+ * التسلسلات الآمنة). عند مخالفة الشرط للخانة الثانية تُدمج الخلية وتصبح خانة  
+ * واحدة (تُترك الخانة الثانية فارغة). ترتيب الموظفين يبدأ بالأقل ساعات لضمان  
+ * توزيع متساوٍ للساعات بين الجميع.  
  */  
-function autoAssignHorizontal(  
+function shuffleArray<T>(arr: T[]): T[] {  
+  const a = [...arr];  
+  for (let i = a.length - 1; i > 0; i--) {  
+    const j = Math.floor(Math.random() * (i + 1));  
+    [a[i], a[j]] = [a[j], a[i]];  
+  }  
+  return a;  
+}  
+  
+/** اختيار وردية عمل مؤهلة عشوائياً وفق الشروط، أو null إذا لا يوجد */  
+function pickRandomEligible(  
+  workingCodes: string[],  
+  curHours: number,  
+  maxHours: number,  
+  sameDayOther: string,  
+  prevDayShift: string,  
+  shifts: Record<string, ShiftType>,  
+  c: AutoAssignConstraints  
+): string | null {  
+  const eligible = workingCodes.filter(code => {  
+    const h = shifts[code]?.hours ?? 0;  
+    if (curHours + h > maxHours) return false;         // يخالف الحد الأقصى للساعات  
+    if (sameDayOther && code === sameDayOther) return false; // تفادي تكرار نفس الوردية باليوم  
+    if (c.safeSequences) {  
+      // منع الصباح مباشرة بعد الليل  
+      if (isNightCode(prevDayShift, shifts) && isMorningCode(code, shifts)) return false;  
+    }  
+    return true;  
+  });  
+  if (eligible.length === 0) return null;  
+  return shuffleArray(eligible)[0];  
+}  
+  
+function autoAssignRandomHorizontal(  
   next: Employee[],  
   shifts: Record<string, ShiftType>,  
+  year: number,  
+  month: number,  
   daysInMonth: number,  
   c: AutoAssignConstraints,  
   warnings: string[]  
 ): void {  
-  const daysPerShift = c.daysPerShift ?? {};  
+  const workingCodes = c.shiftCodes.filter(code => (shifts[code]?.hours ?? 0) > 0);  
+  const restCodes = c.shiftCodes.filter(code => (shifts[code]?.hours ?? 0) === 0);  
+  const restCode = restCodes[0] ?? c.restCode ?? "";  
   
-  // بناء دورة واحدة: مثلاً {D:3, M:3, N:1, R:1} => [D,D,D,M,M,M,N,R]  
-  const seq: string[] = [];  
-  for (const code of c.shiftCodes) {  
-    const n = Math.max(0, Math.floor(daysPerShift[code] ?? 0));  
-    for (let k = 0; k < n; k++) seq.push(code);  
-  }  
-  
-  if (seq.length === 0) {  
-    warnings.push("النمط الأفقي: لم تُحدَّد أيام لأي وردية");  
+  if (workingCodes.length === 0) {  
+    warnings.push("لم يتم اختيار ورديات عمل للتوزيع");  
     return;  
   }  
   
-  next.forEach((emp, empIdx) => {  
-    // إزاحة بداية النمط لكل موظف لتوزيع الورديات عبر الفريق في نفس اليوم  
-    const offset = empIdx % seq.length;  
-    for (let day = 1; day <= daysInMonth; day++) {  
-      const code = seq[(day - 1 + offset) % seq.length];  
-      const key1 = slotKey(day, 1);  
-      const key2 = slotKey(day, 2);  
-      // احترام الخلايا الممتلئة إلا إذا فُعِّل الاستبدال  
-      if (emp.attendance[key1] && !c.overrideExisting) continue;  
-      emp.attendance[key1] = code;  
-      // النمط الأفقي يستخدم وردية واحدة يومياً؛ تُترك الخانة الثانية فارغة  
-      if (!emp.attendance[key2] || c.overrideExisting) emp.attendance[key2] = "";  
+  const hoursPerEmp = next.map(emp => calcTotalHours(emp.attendance, shifts));  
+  const consecutive = next.map(() => 0);  
+  const lastShiftPerEmp = next.map(() => "");  
+  const maxHours = c.maxMonthlyHours;  
+  const maxConsec = c.maxConsecutiveDays;  
+  
+  for (let day = 1; day <= daysInMonth; day++) {  
+    // تحديث عدّاد أيام العمل المتتالية بناءً على الأمس  
+    if (day > 1) {  
+      next.forEach((emp, i) => {  
+        consecutive[i] = dayHasWork(emp, day - 1, shifts) ? consecutive[i] + 1 : 0;  
+        lastShiftPerEmp[i] = getSlot(emp, day - 1, 2) || getSlot(emp, day - 1, 1) || "";  
+      });  
     }  
-  });  
+  
+    // يوم الراحة الأسبوعي  
+    const dow = new Date(year, month, day).getDay();  
+    if (c.weeklyRestDayOfWeek !== null && restCode && dow === c.weeklyRestDayOfWeek) {  
+      next.forEach((emp, i) => {  
+        const k1 = slotKey(day, 1), k2 = slotKey(day, 2);  
+        if (!emp.attendance[k1] || c.overrideExisting) {  
+          emp.attendance[k1] = restCode;  
+          emp.attendance[k2] = "";  
+          consecutive[i] = 0;  
+        }  
+      });  
+      continue;  
+    }  
+  
+    // ترتيب الموظفين: الأقل ساعات أولاً لضمان توزيع متساوٍ للساعات  
+    const order = next.map((_, i) => i).sort((a, b) => hoursPerEmp[a] - hoursPerEmp[b]);  
+  
+    for (const i of order) {  
+      const emp = next[i];  
+      const k1 = slotKey(day, 1), k2 = slotKey(day, 2);  
+  
+      // احترام الخلايا الممتلئة مسبقاً  
+      if (emp.attendance[k1] && !c.overrideExisting) continue;  
+  
+      // تجاوز الحد الأقصى لأيام العمل المتتالية → راحة (خلية مدمجة)  
+      if (consecutive[i] >= maxConsec) {  
+        emp.attendance[k1] = restCode;  
+        emp.attendance[k2] = "";  
+        consecutive[i] = 0;  
+        continue;  
+      }  
+  
+      // الخانة الأولى  
+      const pick1 = pickRandomEligible(workingCodes, hoursPerEmp[i], maxHours, "", lastShiftPerEmp[i], shifts, c);  
+      if (!pick1) {  
+        // لا توجد وردية مؤهلة → راحة/خلية مدمجة فارغة  
+        emp.attendance[k1] = restCode;  
+        emp.attendance[k2] = "";  
+        continue;  
+      }  
+      emp.attendance[k1] = pick1;  
+      hoursPerEmp[i] += shifts[pick1]?.hours ?? 0;  
+  
+      // الخانة الثانية — إن خالفت الشروط تُدمج الخلية (تبقى فارغة)  
+      const pick2 = pickRandomEligible(workingCodes, hoursPerEmp[i], maxHours, pick1, lastShiftPerEmp[i], shifts, c);  
+      if (pick2) {  
+        emp.attendance[k2] = pick2;  
+        hoursPerEmp[i] += shifts[pick2]?.hours ?? 0;  
+      } else {  
+        emp.attendance[k2] = ""; // دمج → خلية واحدة  
+      }  
+    }  
+  }  
 }  
   
 export function autoAssign(  
