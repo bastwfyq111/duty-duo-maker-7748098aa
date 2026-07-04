@@ -433,8 +433,9 @@ function rebalanceHours(
         const code = getSlot(hiEmp, day, slot);  
         const sh = shifts[code]?.hours ?? 0;  
         if (!code || sh <= 0) continue;  
-        // Only move if it strictly reduces the spread  
-        if (spread <= sh) continue;  
+        // Only move if it strictly reduces the gap between this pair.  
+        // After moving: hi -= sh, lo += sh → new pair gap = |spread - 2*sh|.  
+        if (Math.abs(spread - 2 * sh) >= spread) continue;  
         // lo must not already have this code that day  
         if (getSlot(loEmp, day, 1) === code || getSlot(loEmp, day, 2) === code) continue;  
         // Find a free slot for lo on that day  
