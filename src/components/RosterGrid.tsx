@@ -132,29 +132,34 @@ export default function RosterGrid({
   
                   const shiftFor = (val: string) => val ? propShifts[val] : undefined;  
   
+                  // دمج تلقائي: إذا كانت خانة واحدة فقط ممتلئة (أو لا شيء) نعرضها كخلية واحدة  
+                  const filledVals = slotValues.filter(v => v);  
+                  const showSingle = merged || filledVals.length <= 1;  
+                  const singleVal = filledVals[0] ?? "";  
+  
                   return (  
                     <td  
                       key={d}  
                       className={`p-0 select-none ${we && slotValues.every(v => !v) ? "weekend-col" : ""}`}  
                       onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
                     >  
-                      {merged ? (  
+                      {showSingle ? (  
                         // خلية مدمجة: نظهر المحتوى من slot 1 فقط ممتدّاً على كامل المساحة  
                         <div  
                           className="flex h-[56px] w-full items-center justify-center cursor-pointer transition-all duration-150 hover:ring-2 hover:ring-inset hover:ring-primary active:scale-95"  
-                          style={slotValues[0] ? getShiftCellStyle(shiftFor(slotValues[0])?.color) : undefined}  
+                          style={singleVal ? getShiftCellStyle(shiftFor(singleVal)?.color) : undefined}  
                           onClick={() => handleCellClickWithContext(empIdx, d, 1)}  
                           onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
                         >  
-                          {slotValues[0] && shiftFor(slotValues[0]) ? (  
+                          {singleVal && shiftFor(singleVal) ? (  
                             <div className="flex flex-col items-center justify-center leading-none w-full px-0.5 gap-1">  
-                              <span className="font-bold text-[0.75rem] truncate max-w-full">{slotValues[0]}</span>  
-                              <span className="text-[0.5rem] opacity-90 truncate max-w-full">{shiftFor(slotValues[0])?.label}</span>  
-                              {shiftFor(slotValues[0])?.hours > 0 && (  
-                                <span className="text-[0.5rem] opacity-80 font-semibold">{shiftFor(slotValues[0])?.hours}س</span>  
+                              <span className="font-bold text-[0.75rem] truncate max-w-full">{singleVal}</span>  
+                              <span className="text-[0.5rem] opacity-90 truncate max-w-full">{shiftFor(singleVal)?.label}</span>  
+                              {(shiftFor(singleVal)?.hours ?? 0) > 0 && (  
+                                <span className="text-[0.5rem] opacity-80 font-semibold">{shiftFor(singleVal)?.hours}س</span>  
                               )}  
                             </div>  
-                          ) : <span className="text-[0.6rem] truncate max-w-full px-0.5">{slotValues[0]}</span>}  
+                          ) : <span className="text-[0.6rem] truncate max-w-full px-0.5">{singleVal}</span>}  
                         </div>  
                       ) : (  
                         // عدة خانات منفصلة  
