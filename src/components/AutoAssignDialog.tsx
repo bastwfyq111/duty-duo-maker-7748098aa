@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import type { Employee } from "@/hooks/useRosterData";
 import type { ShiftType } from "@/lib/roster";
 import { autoAssign, type AutoAssignConstraints, type AutoAssignStats } from "@/lib/auto-assign";
@@ -39,7 +40,8 @@ export default function AutoAssignDialog({
     setSelectedShifts(workingShiftCodes);
   }, [workingShiftCodes]);
 
-  // New UI state for ordering and fill behavior
+  // Ordering / fill behavior state (logic already existed — now wired to a visible UI)
+  const [useCustomOrdering, setUseCustomOrdering] = useState(false);
   const [orderingText, setOrderingText] = useState(""); // CSV like: A,B,C
   const [usePerEmployeeOrdering, setUsePerEmployeeOrdering] = useState(false);
   const [perEmployeeOrderingText, setPerEmployeeOrderingText] = useState("{}"); // JSON map: { "Name": ["A","B"] }
@@ -59,18 +61,43 @@ export default function AutoAssignDialog({
     const localWarnings: string[] = [];
 
     let ordering: string[] | Record<string, string[]> | undefined = undefined;
-    if (usePerEmployeeOrdering) {
-      try {
-        const parsed = JSON.parse(perEmployeeOrderingText || "{}");
-        // ensure values are arrays of strings
-        const ok = Object.values(parsed).every((v: any) => Array.isArray(v) && v.every((x: any) => typeof x === "string"));
-        if (ok) ordering = parsed;
-        else localWarnings.push("تنسيق تفضيلات الموظفين غير صحيح — يجب أن تكون قيم المخرجات مصفوفات نصية.");
-      } catch (e) {
-        localWarnings.push("خطأ في JSON لتفضيلات الموظفين: " + (e as Error).message);
+
+    if (useCustomOrdering) {
+      if (usePerEmployeeOrdering) {
+        try {
+          const parsed = JSON.parse(perEmployeeOrderingText || "{}");
+          // ensure values are arrays of strings
+          const ok = Object.values(parsed).every(
+            (v: any) => Array.isArray(v) && v.every((x: any) => typeof x === "string")
+          );
+          if (ok) {
+            // validate that every referenced shift code actually exists
+            const unknownCodes = new Set<string>();
+            Object.values(parsed).forEach((arr: any) => {
+              (arr as string[]).forEach((code) => {
+                if (!allShiftCodes.includes(code)) unknownCodes.add(code);
+              });
+            });
+            if (unknownCodes.size > 0) {
+              localWarnings.push(
+                `رموز ورديات غير معروفة في تفضيلات الموظفين: ${[...unknownCodes].join(", ")}`
+              );
+            }
+            ordering = parsed;
+          } else {
+            localWarnings.push("تنسيق تفضيلات الموظفين غير صحيح — يجب أن تكون قيم المخرجات مصفوفات نصية.");
+          }
+        } catch (e) {
+          localWarnings.push("خطأ في JSON لتفضيلات الموظفين: " + (e as Error).message);
+        }
+      } else if (orderingText.trim().length > 0) {
+        const codes = orderingText.split(",").map(s => s.trim()).filter(Boolean);
+        const unknownCodes = codes.filter(c => !allShiftCodes.includes(c));
+        if (unknownCodes.length > 0) {
+          localWarnings.push(`رموز ورديات غير معروفة في الترتيب العام: ${unknownCodes.join(", ")}`);
+        }
+        ordering = codes;
       }
-    } else if (orderingText.trim().length > 0) {
-      ordering = orderingText.split(",").map(s => s.trim()).filter(Boolean);
     }
 
     const constraints: AutoAssignConstraints = {
@@ -86,7 +113,7 @@ export default function AutoAssignDialog({
       randomHorizontal: true,        // ✨ التوزيع الأفقي العشوائي هو الوضع الوحيد
       ordering,
       fillAllDays,
-      strictPriority,
+      strictPriority: useCustomOrdering ? strictPriority : false,
     };
 
     const result = autoAssign(employees, shifts, year, month, constraints);
@@ -182,6 +209,77 @@ export default function AutoAssignDialog({
             <Checkbox checked={override} onCheckedChange={(v) => setOverride(!!v)} />
             استبدال الخلايا الممتلئة مسبقاً
           </label>
+
+          {/* ✨ الميزة الجديدة: ترتيب مخصص للورديات */}
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/5 border border-primary/30 rounded p-2">
+            <Checkbox checked={useCustomOrdering} onCheckedChange={(v) => setUseCustomOrdering(!!v)} />
+            <div className="flex flex-col flex-1">
+              <span className="font-semibold">📋 ترتيب مخصص للورديات</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                حدد بنفسك أولوية الورديات بدل ما يكون التوزيع عشوائي بالكامل
+              </span>
+            </div>
+          </label>
+
+          {useCustomOrdering && (
+            <div className="pr-2 space-y-2 border-r-2 border-primary/20 mr-1 pl-1">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <Checkbox
+                  checked={usePerEmployeeOrdering}
+                  onCheckedChange={(v) => setUsePerEmployeeOrdering(!!v)}
+                />
+                ترتيب مختلف لكل موظف (بدل ترتيب عام واحد)
+              </label>
+
+              {!usePerEmployeeOrdering ? (
+                <div>
+                  <Label className="text-xs">الترتيب العام (افصل بين رموز الورديات بفاصلة)</Label>
+                  <Input
+                    className="h-8 text-xs mt-1 font-mono"
+                    placeholder="مثال: A,B,C"
+                    value={orderingText}
+                    onChange={(e) => setOrderingText(e.target.value)}
+                  />
+                  <p className="text-[0.65rem] text-muted-foreground mt-1">
+                    الرموز المتاحة: {allShiftCodes.join(", ")}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <Label className="text-xs">ترتيب لكل موظف (بصيغة JSON)</Label>
+                  <Textarea
+                    className="text-xs mt-1 font-mono min-h-[90px]"
+                    placeholder={`{\n  "اسم الموظف": ["A", "B"],\n  "موظف آخر": ["B", "A"]\n}`}
+                    value={perEmployeeOrderingText}
+                    onChange={(e) => setPerEmployeeOrderingText(e.target.value)}
+                  />
+                  <p className="text-[0.65rem] text-muted-foreground mt-1">
+                    اكتب اسم كل موظف كما هو مسجل بالضبط، مع مصفوفة برموز الورديات مرتبة حسب الأولوية.
+                  </p>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <Checkbox checked={strictPriority} onCheckedChange={(v) => setStrictPriority(!!v)} />
+                <span>
+                  التزام صارم بالترتيب
+                  <span className="block text-[0.65rem] text-muted-foreground">
+                    لو مفعّل: ما يعطي وردية لاحقة إلا بعد استحالة إعطاء الوردية ذات الأولوية الأعلى
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <Checkbox checked={fillAllDays} onCheckedChange={(v) => setFillAllDays(!!v)} />
+                <span>
+                  تعبئة كل الأيام
+                  <span className="block text-[0.65rem] text-muted-foreground">
+                    لو مفعّل: يحاول ملء كل خانة فاضية حتى لو تجاوز التوازن المثالي بين الموظفين
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Warnings / Preview info */}
           {warnings.length > 0 && (
