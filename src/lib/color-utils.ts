@@ -81,11 +81,15 @@ export function getShiftCellStyle(color?: string): React.CSSProperties {
     fontWeight: 700,  
   };  
   if (!color) return base;  
-  const c = formatHslForCss(color);  
+  const parsed = parseHslString(color);  
+  if (!parsed) return base;  
+  const { h, s, l } = parsed;  
+  // نص داكن واضح: نسخة أغمق من لون الوردية لضمان تباين قوي فوق الخلفية الفاتحة  
+  const textL = Math.max(20, l - 25);  
   return {  
     ...base,  
-    backgroundColor: `hsla(${c}, 0.18)`,  
-    color: `hsl(${c})`, // نص بلون الوردية نفسه (داكن وواضح فوق الخلفية الفاتحة)  
+    backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.28)`,  
+    color: `hsl(${h}, ${s}%, ${textL}%)`,  
   };  
 }  
   
