@@ -99,6 +99,8 @@ function candidateScore(
   score += consecutive[i] * 3;  
   // penalize if lastShift equals code to encourage diversity  
   if (lastShift === code) score += 12;  
+  // deterministic tie-breaker so equal scores resolve consistently  
+  score += i * 0.001;  
   return score;  
 }  
   
