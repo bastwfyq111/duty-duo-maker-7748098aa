@@ -48,6 +48,19 @@ export default function AutoAssignDialog({
   const [fillAllDays, setFillAllDays] = useState(false);
   const [strictPriority, setStrictPriority] = useState(false);
 
+  // ✨ نمط تسلسلي شهري (مثال: M,D,R يتكرر طول الشهر)
+  const [useSequencePattern, setUseSequencePattern] = useState(false);
+  const [sequencePatternText, setSequencePatternText] = useState("");
+  const [sequenceStagger, setSequenceStagger] = useState(true);
+
+  // ✨ حصة ثابتة لكل نوع وردية (نفس العدد لكل الموظفين)
+  const [useShiftQuotas, setUseShiftQuotas] = useState(false);
+  const [quotas, setQuotas] = useState<Record<string, number>>({});
+
+  const setQuota = (code: string, value: number) => {
+    setQuotas(prev => ({ ...prev, [code]: value }));
+  };
+
   const [preview, setPreview] = useState<Employee[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [stats, setStats] = useState<AutoAssignStats | null>(null);
@@ -100,6 +113,24 @@ export default function AutoAssignDialog({
       }
     }
 
+    // ✨ النمط التسلسلي الشهري
+    let sequencePattern: string[] | undefined = undefined;
+    if (useSequencePattern) {
+      sequencePattern = sequencePatternText.split(",").map(s => s.trim()).filter(Boolean);
+      const unknownCodes = sequencePattern.filter(c => !allShiftCodes.includes(c));
+      if (unknownCodes.length > 0) {
+        localWarnings.push(`رموز غير معروفة في النمط التسلسلي: ${unknownCodes.join(", ")}`);
+      }
+      if (sequencePattern.length === 0) {
+        localWarnings.push("النمط التسلسلي فارغ — تم تجاهله.");
+      }
+    }
+
+    // ✨ الحصص الثابتة لكل وردية
+    const shiftQuotas: Record<string, number> | undefined = useShiftQuotas
+      ? Object.fromEntries(Object.entries(quotas).filter(([, v]) => v > 0))
+      : undefined;
+
     const constraints: AutoAssignConstraints = {
       shiftCodes: selectedShifts,
       maxMonthlyHours: maxHours,
@@ -114,6 +145,11 @@ export default function AutoAssignDialog({
       ordering,
       fillAllDays,
       strictPriority: useCustomOrdering ? strictPriority : false,
+      useSequencePattern,
+      sequencePattern,
+      sequenceStagger,
+      useShiftQuotas,
+      shiftQuotas,
     };
 
     const result = autoAssign(employees, shifts, year, month, constraints);
@@ -278,6 +314,82 @@ export default function AutoAssignDialog({
                   </span>
                 </span>
               </label>
+            </div>
+          )}
+
+          {/* ✨ الميزة الجديدة: نمط تسلسلي شهري */}
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-secondary/10 border border-secondary/40 rounded p-2">
+            <Checkbox checked={useSequencePattern} onCheckedChange={(v) => setUseSequencePattern(!!v)} />
+            <div className="flex flex-col flex-1">
+              <span className="font-semibold">🔁 نمط تسلسلي شهري</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                دورة متكررة طول الشهر بدل التوزيع العشوائي (مثال: M ثم D ثم راحة، وتتكرر)
+              </span>
+            </div>
+          </label>
+
+          {useSequencePattern && (
+            <div className="pr-2 space-y-2 border-r-2 border-secondary/30 mr-1 pl-1">
+              <div>
+                <Label className="text-xs">تسلسل الدورة (افصل بفاصلة، بالترتيب)</Label>
+                <Input
+                  className="h-8 text-xs mt-1 font-mono"
+                  placeholder="مثال: M,D,R"
+                  value={sequencePatternText}
+                  onChange={(e) => setSequencePatternText(e.target.value)}
+                />
+                <p className="text-[0.65rem] text-muted-foreground mt-1">
+                  الرموز المتاحة (تشمل رموز الراحة): {allShiftCodes.join(", ")}
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <Checkbox checked={sequenceStagger} onCheckedChange={(v) => setSequenceStagger(!!v)} />
+                <span>
+                  بداية مختلفة لكل موظف
+                  <span className="block text-[0.65rem] text-muted-foreground">
+                    لو مفعّل: كل موظف يبدأ الدورة من نقطة مختلفة (يمنع تطابق الجميع بنفس الوردية بنفس اليوم)
+                  </span>
+                </span>
+              </label>
+
+              <p className="text-[0.65rem] text-muted-foreground bg-muted/30 rounded p-1.5">
+                ملاحظة: لو وردية الدورة تعارضت مع حد الساعات أو حصة معينة، يبحث النظام عن أقرب بديل مناسب ضمن نفس الدورة قبل ما يرجع للاختيار العشوائي.
+              </p>
+            </div>
+          )}
+
+          {/* ✨ الميزة الجديدة: حصة ثابتة لكل وردية */}
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-secondary/10 border border-secondary/40 rounded p-2">
+            <Checkbox checked={useShiftQuotas} onCheckedChange={(v) => setUseShiftQuotas(!!v)} />
+            <div className="flex flex-col flex-1">
+              <span className="font-semibold">🎯 حصة ثابتة لكل وردية</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                حدد عدد أيام ثابت لكل نوع وردية خلال الشهر (نفس العدد لكل الموظفين)
+              </span>
+            </div>
+          </label>
+
+          {useShiftQuotas && (
+            <div className="pr-2 space-y-2 border-r-2 border-secondary/30 mr-1 pl-1">
+              <div className="grid grid-cols-2 gap-2">
+                {workingShiftCodes.map(code => (
+                  <div key={code} className="flex items-center gap-2">
+                    <Label className="text-xs w-10 shrink-0">{code}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-8 text-xs"
+                      value={quotas[code] ?? ""}
+                      placeholder="0"
+                      onChange={(e) => setQuota(code, Number(e.target.value) || 0)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[0.65rem] text-muted-foreground">
+                لو مجموع الحصص أكبر من أيام الشهر المتاحة لكل موظف، بعض الحصص قد لا تتحقق بالكامل — بتظهر لك تنبيهات بعد التوليد توضح الناقص أو الزائد.
+              </p>
             </div>
           )}
 
