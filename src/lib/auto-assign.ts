@@ -254,9 +254,9 @@ export function autoAssign(
     return { employees: next, warnings };  
   }  
   
-  // ✨ فرع التوزيع الأفقي: يُنفّذ نمطاً ثابتاً لكل موظف ثم يعود مبكراً  
-  if (c.horizontalPattern) {  
-    autoAssignHorizontal(next, shifts, daysInMonth, c, warnings);  
+  // ✨ فرع التوزيع الأفقي العشوائي: يملأ الصفوف عشوائياً مع موازنة الساعات ثم يعود مبكراً  
+  if (c.randomHorizontal) {  
+    autoAssignRandomHorizontal(next, shifts, year, month, daysInMonth, c, warnings);  
     const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));  
     const stats: AutoAssignStats = {  
       maxHours: finalHours.length ? Math.max(...finalHours) : 0,  
