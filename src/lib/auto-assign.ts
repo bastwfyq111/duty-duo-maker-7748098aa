@@ -569,14 +569,24 @@ function pickBestShift(
     }  
   }  
   
-  // Fair distribution: choose shift with fewest assignments today  
+  // Fair distribution: choose shift with fewest assignments today.  
+  // Tie-breaks favour (1) not repeating lastShift, then (2) more hours to  
+  // help lift a low-hours employee toward the average.  
   if (c.fairDistribution) {  
     let best = available[0];  
     let bestCount = Infinity;  
+    let bestRepeat = true;  
+    let bestHours = -1;  
     for (const code of available) {  
       let count = 0;  
       employees.forEach(e => { if (getSlot(e, day, 1) === code || getSlot(e, day, 2) === code) count++; });  
-      if (count < bestCount) { bestCount = count; best = code; }  
+      const repeat = code === lastShift;  
+      const hrs = shifts[code]?.hours ?? 0;  
+      const better =  
+        count < bestCount ||  
+        (count === bestCount && !repeat && bestRepeat) ||  
+        (count === bestCount && repeat === bestRepeat && hrs > bestHours);  
+      if (better) { bestCount = count; bestRepeat = repeat; bestHours = hrs; best = code; }  
     }  
     return best;  
   }  
