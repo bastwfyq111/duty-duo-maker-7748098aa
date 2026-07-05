@@ -29,6 +29,7 @@ export default function AutoAssignDialog({
   );
 
   const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
+  const [useShiftConditions, setUseShiftConditions] = useState(true);
   const [maxHours, setMaxHours] = useState(180);
   const [maxConsecutive, setMaxConsecutive] = useState(6);
   const [override, setOverride] = useState(false);
