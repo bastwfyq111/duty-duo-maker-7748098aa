@@ -45,16 +45,22 @@ export function AddShiftDialog({ open, onClose, onAdd, existingCodes }: AddShift
   const [label, setLabel] = useState("");  
   const [hours, setHours] = useState("");  
   const [color, setColor] = useState(PRESET_COLORS[0]);  
+  const [direction, setDirection] = useState<ShiftDirection>("vertical");  
+  const [count, setCount] = useState("1");  
   const [error, setError] = useState("");  
   
-  const reset = () => { setCode(""); setLabel(""); setHours(""); setColor(PRESET_COLORS[0]); setError(""); };  
+  const reset = () => { setCode(""); setLabel(""); setHours(""); setColor(PRESET_COLORS[0]); setDirection("vertical"); setCount("1"); setError(""); };  
+  
+  const isWorking = (Number(hours) || 0) > 0;  
   
   const handleAdd = () => {  
     const trimCode = code.trim().toUpperCase();  
     if (!trimCode || !label.trim()) { setError("يرجى ملء الرمز والاسم"); return; }  
     if (trimCode.length > 4) { setError("الرمز يجب ألا يتجاوز 4 أحرف"); return; }  
     if (existingCodes.includes(trimCode)) { setError("هذا الرمز موجود بالفعل"); return; }  
-    onAdd(trimCode, { hours: Number(hours) || 0, label: label.trim(), color });  
+    const shift: ShiftType = { hours: Number(hours) || 0, label: label.trim(), color };  
+    if (isWorking) { shift.direction = direction; shift.count = Math.max(0, Number(count) || 0); }  
+    onAdd(trimCode, shift);  
     reset();  
     onClose();  
   };  
@@ -64,6 +70,7 @@ export function AddShiftDialog({ open, onClose, onAdd, existingCodes }: AddShift
       <input type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="الرمز (مثال: E)" maxLength={4} className={`${inputClass} text-center`} />  
       <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الوردية (مثال: مسائي)" className={inputClass} />  
       <input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="عدد الساعات" min={0} max={24} className={inputClass} />  
+      {isWorking && <ConditionPicker direction={direction} onDirectionChange={setDirection} count={count} onCountChange={setCount} />}  
       <ColorPicker value={color} onChange={setColor} />  
       {error && <p className="text-xs text-destructive text-center">{error}</p>}  
       <button onClick={handleAdd} className="py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all active:scale-[0.97]">  
