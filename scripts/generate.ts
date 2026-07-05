@@ -16,12 +16,17 @@ function parseArgList(name: string, fallback: string[]): string[] {
   return fallback;
 }
 
+function parseFlag(name: string): boolean {
+  return process.argv.includes(`--${name}`);
+}
+
 const numCells = parseArgInt('cells', 5);
 const days = parseArgInt('days', 31);
 const shifts = parseArgList('shifts', ['N', 'R', 'O']);
+const wrap = parseFlag('wrap');
 
 try {
-  const schedules = generateSchedules(numCells, days, shifts);
+  const schedules = generateSchedules(numCells, days, shifts, wrap);
   const csv = schedulesToCSV(schedules);
   console.log(csv);
 } catch (err) {
