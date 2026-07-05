@@ -142,7 +142,8 @@ export default function AutoAssignDialog({
       overrideExisting: override,
       safeSequences,
       maxConsecutiveNights,
-      randomHorizontal: true,        // ✨ التوزيع الأفقي العشوائي هو الوضع الوحيد
+      randomHorizontal: !useShiftConditions, // العشوائي فقط إذا لم يُفعّل وضع الشروط
+      useShiftConditions,                    // ✨ التوزيع حسب شروط كل وردية
       ordering,
       fillAllDays,
       strictPriority: useCustomOrdering ? strictPriority : false,
