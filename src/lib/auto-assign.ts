@@ -29,6 +29,8 @@ export interface AutoAssignConstraints {
   // ✨ حصة ثابتة لكل نوع وردية خلال الشهر (نفس العدد لكل الموظفين)
   shiftQuotas?: Record<string, number>;
   useShiftQuotas?: boolean;
+  // ✨ التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب إضافة الورديات
+  useShiftConditions?: boolean;
 }
 
 /** Detect night-shift code by convention (code starts with N or label mentions "ليل"). */
