@@ -539,6 +539,19 @@ export function autoAssign(
     return { employees: next, warnings };
   }
 
+  // ✨ فرع التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب الإضافة
+  if (c.useShiftConditions) {
+    autoAssignByConditions(next, shifts, year, month, daysInMonth, c, warnings);
+    const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
+    const stats: AutoAssignStats = {
+      maxHours: finalHours.length ? Math.max(...finalHours) : 0,
+      minHours: finalHours.length ? Math.min(...finalHours) : 0,
+      avgHours: finalHours.length ? Math.round(finalHours.reduce((s, h) => s + h, 0) / finalHours.length) : 0,
+      spread: finalHours.length ? Math.max(...finalHours) - Math.min(...finalHours) : 0,
+    };
+    return { employees: next, warnings, stats };
+  }
+
   // ✨ فرع التوزيع الأفقي العشوائي: يملأ الصفوف عشوائياً مع موازنة الساعات ثم يعود مبكراً
   if (c.randomHorizontal) {
     autoAssignRandomHorizontal(next, shifts, year, month, daysInMonth, c, warnings);
