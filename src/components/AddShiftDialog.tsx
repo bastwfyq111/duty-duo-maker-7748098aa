@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";  
 import { AnimatePresence, motion } from "framer-motion";  
-import type { ShiftType } from "@/lib/roster";  
+import type { ShiftType, ShiftDirection } from "@/lib/roster";  
 import { hslStringToCss } from "@/lib/color-utils";  
   
 const PRESET_COLORS = [  
