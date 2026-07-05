@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";  
 import { AnimatePresence, motion } from "framer-motion";  
-import type { ShiftType } from "@/lib/roster";  
+import type { ShiftType, ShiftDirection } from "@/lib/roster";  
 import { hslStringToCss } from "@/lib/color-utils";  
   
 const PRESET_COLORS = [  
@@ -45,16 +45,22 @@ export function AddShiftDialog({ open, onClose, onAdd, existingCodes }: AddShift
   const [label, setLabel] = useState("");  
   const [hours, setHours] = useState("");  
   const [color, setColor] = useState(PRESET_COLORS[0]);  
+  const [direction, setDirection] = useState<ShiftDirection>("vertical");  
+  const [count, setCount] = useState("1");  
   const [error, setError] = useState("");  
   
-  const reset = () => { setCode(""); setLabel(""); setHours(""); setColor(PRESET_COLORS[0]); setError(""); };  
+  const reset = () => { setCode(""); setLabel(""); setHours(""); setColor(PRESET_COLORS[0]); setDirection("vertical"); setCount("1"); setError(""); };  
+  
+  const isWorking = (Number(hours) || 0) > 0;  
   
   const handleAdd = () => {  
     const trimCode = code.trim().toUpperCase();  
     if (!trimCode || !label.trim()) { setError("يرجى ملء الرمز والاسم"); return; }  
     if (trimCode.length > 4) { setError("الرمز يجب ألا يتجاوز 4 أحرف"); return; }  
     if (existingCodes.includes(trimCode)) { setError("هذا الرمز موجود بالفعل"); return; }  
-    onAdd(trimCode, { hours: Number(hours) || 0, label: label.trim(), color });  
+    const shift: ShiftType = { hours: Number(hours) || 0, label: label.trim(), color };  
+    if (isWorking) { shift.direction = direction; shift.count = Math.max(0, Number(count) || 0); }  
+    onAdd(trimCode, shift);  
     reset();  
     onClose();  
   };  
@@ -64,6 +70,7 @@ export function AddShiftDialog({ open, onClose, onAdd, existingCodes }: AddShift
       <input type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="الرمز (مثال: E)" maxLength={4} className={`${inputClass} text-center`} />  
       <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الوردية (مثال: مسائي)" className={inputClass} />  
       <input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="عدد الساعات" min={0} max={24} className={inputClass} />  
+      {isWorking && <ConditionPicker direction={direction} onDirectionChange={setDirection} count={count} onCountChange={setCount} />}  
       <ColorPicker value={color} onChange={setColor} />  
       {error && <p className="text-xs text-destructive text-center">{error}</p>}  
       <button onClick={handleAdd} className="py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all active:scale-[0.97]">  
@@ -86,18 +93,26 @@ export function EditShiftDialog({ open, onClose, onSave, shiftCode, shiftData }:
   const [label, setLabel] = useState("");  
   const [hours, setHours] = useState("");  
   const [color, setColor] = useState(PRESET_COLORS[0]);  
+  const [direction, setDirection] = useState<ShiftDirection>("vertical");  
+  const [count, setCount] = useState("1");  
   
   useEffect(() => {  
     if (shiftData) {  
       setLabel(shiftData.label);  
       setHours(String(shiftData.hours));  
       setColor(shiftData.color || PRESET_COLORS[0]);  
+      setDirection(shiftData.direction ?? "vertical");  
+      setCount(String(shiftData.count ?? 1));  
     }  
   }, [shiftData]);  
   
+  const isWorking = (Number(hours) || 0) > 0;  
+  
   const handleSave = () => {  
     if (!label.trim()) return;  
-    onSave(shiftCode, { hours: Number(hours) || 0, label: label.trim(), color });  
+    const shift: ShiftType = { hours: Number(hours) || 0, label: label.trim(), color };  
+    if (isWorking) { shift.direction = direction; shift.count = Math.max(0, Number(count) || 0); }  
+    onSave(shiftCode, shift);  
     onClose();  
   };  
   
@@ -105,6 +120,7 @@ export function EditShiftDialog({ open, onClose, onSave, shiftCode, shiftData }:
     <DialogShell open={open} onClose={onClose} title={`تعديل الوردية: ${shiftCode}`}>  
       <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الوردية" className={inputClass} />  
       <input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="عدد الساعات" min={0} max={24} className={inputClass} />  
+      {isWorking && <ConditionPicker direction={direction} onDirectionChange={setDirection} count={count} onCountChange={setCount} />}  
       <ColorPicker value={color} onChange={setColor} />  
       <button onClick={handleSave} className="py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all active:scale-[0.97]">  
         حفظ التعديلات  
@@ -154,4 +170,46 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );  
 }  
   
+function ConditionPicker({
+  direction, onDirectionChange, count, onCountChange,
+}: {
+  direction: ShiftDirection;
+  onDirectionChange: (d: ShiftDirection) => void;
+  count: string;
+  onCountChange: (c: string) => void;
+}) {
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 p-2 flex flex-col gap-1.5">
+      <p className="text-[0.7rem] font-semibold text-foreground">شروط التوزيع التلقائي</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => onDirectionChange("vertical")}
+          className={`py-1.5 rounded-md text-[0.7rem] font-semibold border-2 transition-all ${direction === "vertical" ? "border-primary bg-primary/15 text-primary" : "border-foreground/15 text-muted-foreground"}`}
+        >
+          ⬇️ عمودي
+        </button>
+        <button
+          type="button"
+          onClick={() => onDirectionChange("horizontal")}
+          className={`py-1.5 rounded-md text-[0.7rem] font-semibold border-2 transition-all ${direction === "horizontal" ? "border-primary bg-primary/15 text-primary" : "border-foreground/15 text-muted-foreground"}`}
+        >
+          ➡️ أفقي
+        </button>
+      </div>
+      <label className="text-[0.65rem] text-muted-foreground">
+        {direction === "vertical" ? "عدد الموظفين لكل يوم" : "عدد الأيام في الشهر لكل موظف"}
+      </label>
+      <input
+        type="number"
+        min={0}
+        value={count}
+        onChange={e => onCountChange(e.target.value)}
+        placeholder="0"
+        className={`${inputClass} text-center`}
+      />
+    </div>
+  );
+}
+
 export default AddShiftDialog;

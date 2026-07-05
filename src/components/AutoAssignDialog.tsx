@@ -29,6 +29,7 @@ export default function AutoAssignDialog({
   );
 
   const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
+  const [useShiftConditions, setUseShiftConditions] = useState(true);
   const [maxHours, setMaxHours] = useState(180);
   const [maxConsecutive, setMaxConsecutive] = useState(6);
   const [override, setOverride] = useState(false);
@@ -141,7 +142,8 @@ export default function AutoAssignDialog({
       overrideExisting: override,
       safeSequences,
       maxConsecutiveNights,
-      randomHorizontal: true,        // ✨ التوزيع الأفقي العشوائي هو الوضع الوحيد
+      randomHorizontal: !useShiftConditions, // العشوائي فقط إذا لم يُفعّل وضع الشروط
+      useShiftConditions,                    // ✨ التوزيع حسب شروط كل وردية
       ordering,
       fillAllDays,
       strictPriority: useCustomOrdering ? strictPriority : false,
@@ -183,9 +185,43 @@ export default function AutoAssignDialog({
         </DialogHeader>
 
         <div className="space-y-3 text-right">
-          <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
-            ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع. الخلية [...]
-          </p>
+          {/* ✨ الوضع الرئيسي: التوزيع حسب شروط كل وردية */}
+          <label className="flex items-center gap-2 text-xs cursor-pointer bg-primary/10 border border-primary/40 rounded p-2">
+            <Checkbox checked={useShiftConditions} onCheckedChange={(v) => setUseShiftConditions(!!v)} />
+            <div className="flex flex-col flex-1">
+              <span className="font-semibold">🧭 التوزيع حسب شروط كل وردية</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                يوزّع كل وردية حسب اتجاهها (عمودي/أفقي) وعددها المحدد في نافذة تعديل الوردية، بترتيب إضافة الورديات، ويملأ الخانتين.
+              </span>
+            </div>
+          </label>
+
+          {useShiftConditions ? (
+            <div className="bg-primary/5 border border-primary/20 rounded p-2 text-[0.7rem] space-y-1">
+              <div className="font-semibold">شروط الورديات الحالية (بالترتيب):</div>
+              {workingShiftCodes.filter(c => selectedShifts.includes(c)).map(code => {
+                const st = shifts[code];
+                const cnt = st?.count ?? 0;
+                const dir = st?.direction ?? "vertical";
+                return (
+                  <div key={code} className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-semibold">{code}</span>
+                    {cnt > 0 ? (
+                      <span className="text-muted-foreground">
+                        {dir === "vertical" ? `⬇️ عمودي · ${cnt} موظف/يوم` : `➡️ أفقي · ${cnt} يوم/شهر`}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600">لا يوجد شرط — عدّل الوردية وحدد الاتجاه والعدد</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
+              ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع.
+            </p>
+          )}
 
           {/* Shifts to distribute */}
           <div>

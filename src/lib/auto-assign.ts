@@ -29,6 +29,8 @@ export interface AutoAssignConstraints {
   // ✨ حصة ثابتة لكل نوع وردية خلال الشهر (نفس العدد لكل الموظفين)
   shiftQuotas?: Record<string, number>;
   useShiftQuotas?: boolean;
+  // ✨ التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب إضافة الورديات
+  useShiftConditions?: boolean;
 }
 
 /** Detect night-shift code by convention (code starts with N or label mentions "ليل"). */
@@ -359,6 +361,162 @@ function autoAssignRandomHorizontal(
   }
 }
 
+/** عدد الأيام العمل المتتالية التي سيكوّنها العمل في `day` (يشمل day نفسه) */
+function consecutiveRunIfWork(emp: Employee, day: number, daysInMonth: number, shifts: Record<string, ShiftType>): number {
+  // إذا كان الموظف يعمل بالفعل في هذا اليوم، إضافة وردية للخانة الثانية لا تزيد عدد الأيام
+  let run = 1;
+  for (let d = day - 1; d >= 1; d--) { if (dayHasWork(emp, d, shifts)) run++; else break; }
+  for (let d = day + 1; d <= daysInMonth; d++) { if (dayHasWork(emp, d, shifts)) run++; else break; }
+  return run;
+}
+
+/** هل يمكن إسناد الوردية `code` للموظف في هذا اليوم دون مخالفة الشروط؟ */
+function canAssignConditional(
+  emp: Employee,
+  day: number,
+  code: string,
+  hoursNow: number,
+  daysInMonth: number,
+  shifts: Record<string, ShiftType>,
+  c: AutoAssignConstraints
+): 1 | 2 | null {
+  const s1 = getSlot(emp, day, 1);
+  const s2 = getSlot(emp, day, 2);
+  // تفادي تكرار نفس الوردية في نفس اليوم
+  if (s1 === code || s2 === code) return null;
+  // خانة فارغة متاحة
+  const slot: 1 | 2 | null = !s1 ? 1 : !s2 ? 2 : null;
+  if (slot === null) return null;
+
+  const h = shifts[code]?.hours ?? 0;
+  if (hoursNow + h > c.maxMonthlyHours) return null;
+
+  const alreadyWorks = dayHasWork(emp, day, shifts);
+  if (!alreadyWorks) {
+    if (consecutiveRunIfWork(emp, day, daysInMonth, shifts) > c.maxConsecutiveDays) return null;
+  }
+
+  if (c.safeSequences) {
+    const maxNights = c.maxConsecutiveNights ?? 2;
+    // لا صباح مباشرة بعد ليلة (اليوم السابق)
+    const prev1 = getSlot(emp, day - 1, 1), prev2 = getSlot(emp, day - 1, 2);
+    const prevNight = isNightCode(prev1, shifts) || isNightCode(prev2, shifts);
+    if (prevNight && isMorningCode(code, shifts)) return null;
+    // لا صباح في اليوم التالي إن كانت هذه الوردية ليلية
+    const nxt1 = getSlot(emp, day + 1, 1), nxt2 = getSlot(emp, day + 1, 2);
+    const nextMorning = isMorningCode(nxt1, shifts) || isMorningCode(nxt2, shifts);
+    if (isNightCode(code, shifts) && nextMorning) return null;
+    // تحديد الليالي المتتالية
+    if (isNightCode(code, shifts)) {
+      let nights = 1;
+      for (let d = day - 1; d >= 1; d--) { if (isNightCode(getSlot(emp, d, 1), shifts) || isNightCode(getSlot(emp, d, 2), shifts)) nights++; else break; }
+      for (let d = day + 1; d <= daysInMonth; d++) { if (isNightCode(getSlot(emp, d, 1), shifts) || isNightCode(getSlot(emp, d, 2), shifts)) nights++; else break; }
+      if (nights > maxNights) return null;
+    }
+  }
+
+  return slot;
+}
+
+/**
+ * ✨ التوزيع حسب شروط كل وردية:
+ * تُعالَج الورديات بترتيب إضافتها. لكل وردية عمل حسب اتجاهها:
+ * - عمودي: تُملأ لكل يوم عند `count` موظفين (الأقل ساعات أولاً) → تغطية اليوم.
+ * - أفقي: تُملأ لكل موظف عند `count` يوم موزّعة على الشهر → صف الموظف.
+ * تُملأ الخانتان (slot 1 و 2) تلقائياً، وتُحترم كل القيود (الساعات، الأيام المتتالية،
+ * التسلسلات الآمنة، الخلايا الممتلئة مسبقاً).
+ */
+function autoAssignByConditions(
+  next: Employee[],
+  shifts: Record<string, ShiftType>,
+  year: number,
+  month: number,
+  daysInMonth: number,
+  c: AutoAssignConstraints,
+  warnings: string[]
+): void {
+  const hoursPerEmp = next.map(emp => calcTotalHours(emp.attendance, shifts));
+
+  // الورديات بترتيب إضافتها (كما وردت في shiftCodes) — ورديات العمل فقط
+  const orderedCodes = c.shiftCodes.filter(code => (shifts[code]?.hours ?? 0) > 0);
+
+  const configured = orderedCodes.filter(code => (shifts[code]?.count ?? 0) > 0);
+  if (configured.length === 0) {
+    warnings.push("لا توجد ورديات لها شروط توزيع (اتجاه + عدد). عدّل الورديات وحدد الاتجاه والعدد أولاً.");
+    return;
+  }
+
+  for (const code of orderedCodes) {
+    const st = shifts[code];
+    const count = st?.count ?? 0;
+    if (count <= 0) continue;
+    const dir = st?.direction ?? "vertical";
+
+    if (dir === "vertical") {
+      // لكل يوم: نحتاج count موظفين على هذه الوردية
+      for (let day = 1; day <= daysInMonth; day++) {
+        let assigned = 0;
+        next.forEach(emp => { if (getSlot(emp, day, 1) === code || getSlot(emp, day, 2) === code) assigned++; });
+        let need = count - assigned;
+        if (need <= 0) continue;
+
+        const cands = next
+          .map((_, i) => i)
+          .sort((a, b) => hoursPerEmp[a] - hoursPerEmp[b] || a - b);
+
+        for (const i of cands) {
+          if (need <= 0) break;
+          const slot = canAssignConditional(next[i], day, code, hoursPerEmp[i], daysInMonth, shifts, c);
+          if (slot === null) continue;
+          next[i].attendance[slotKey(day, slot)] = code;
+          hoursPerEmp[i] += st.hours;
+          need--;
+        }
+        if (need > 0) {
+          warnings.push(`⚠️ اليوم ${day}: نقص ${need} موظف في الوردية ${code} (عمودي)`);
+        }
+      }
+    } else {
+      // أفقي: لكل موظف count يوم موزّعة على الشهر
+      next.forEach((emp, i) => {
+        let assigned = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+          if (getSlot(emp, day, 1) === code || getSlot(emp, day, 2) === code) assigned++;
+        }
+        let need = count - assigned;
+        if (need <= 0) return;
+
+        // أهداف موزّعة بالتساوي على الشهر
+        const targets: number[] = [];
+        for (let k = 0; k < need; k++) {
+          targets.push(Math.min(daysInMonth, Math.max(1, Math.round((k + 0.5) * daysInMonth / count))));
+        }
+        const used = new Set<number>();
+        for (const t of targets) {
+          let done = false;
+          for (let radius = 0; radius <= daysInMonth && !done; radius++) {
+            for (const day of [t - radius, t + radius]) {
+              if (day < 1 || day > daysInMonth || used.has(day)) continue;
+              const slot = canAssignConditional(emp, day, code, hoursPerEmp[i], daysInMonth, shifts, c);
+              if (slot === null) continue;
+              emp.attendance[slotKey(day, slot)] = code;
+              hoursPerEmp[i] += st.hours;
+              used.add(day);
+              need--;
+              done = true;
+              break;
+            }
+          }
+          if (!done) break;
+        }
+        if (need > 0) {
+          warnings.push(`⚠️ ${emp.name}: نقص ${need} يوم في الوردية ${code} (أفقي)`);
+        }
+      });
+    }
+  }
+}
+
 export function autoAssign(
   employees: Employee[],
   shifts: Record<string, ShiftType>,
@@ -379,6 +537,19 @@ export function autoAssign(
   if (c.shiftCodes.length === 0) {
     warnings.push("لم يتم اختيار ورديات للتوزيع");
     return { employees: next, warnings };
+  }
+
+  // ✨ فرع التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب الإضافة
+  if (c.useShiftConditions) {
+    autoAssignByConditions(next, shifts, year, month, daysInMonth, c, warnings);
+    const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
+    const stats: AutoAssignStats = {
+      maxHours: finalHours.length ? Math.max(...finalHours) : 0,
+      minHours: finalHours.length ? Math.min(...finalHours) : 0,
+      avgHours: finalHours.length ? Math.round(finalHours.reduce((s, h) => s + h, 0) / finalHours.length) : 0,
+      spread: finalHours.length ? Math.max(...finalHours) - Math.min(...finalHours) : 0,
+    };
+    return { employees: next, warnings, stats };
   }
 
   // ✨ فرع التوزيع الأفقي العشوائي: يملأ الصفوف عشوائياً مع موازنة الساعات ثم يعود مبكراً
