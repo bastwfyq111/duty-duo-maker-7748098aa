@@ -517,7 +517,7 @@ function autoAssignByConditions(
   }
 }
 
-
+export function autoAssign(
   employees: Employee[],
   shifts: Record<string, ShiftType>,
   year: number,
