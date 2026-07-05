@@ -93,18 +93,26 @@ export function EditShiftDialog({ open, onClose, onSave, shiftCode, shiftData }:
   const [label, setLabel] = useState("");  
   const [hours, setHours] = useState("");  
   const [color, setColor] = useState(PRESET_COLORS[0]);  
+  const [direction, setDirection] = useState<ShiftDirection>("vertical");  
+  const [count, setCount] = useState("1");  
   
   useEffect(() => {  
     if (shiftData) {  
       setLabel(shiftData.label);  
       setHours(String(shiftData.hours));  
       setColor(shiftData.color || PRESET_COLORS[0]);  
+      setDirection(shiftData.direction ?? "vertical");  
+      setCount(String(shiftData.count ?? 1));  
     }  
   }, [shiftData]);  
   
+  const isWorking = (Number(hours) || 0) > 0;  
+  
   const handleSave = () => {  
     if (!label.trim()) return;  
-    onSave(shiftCode, { hours: Number(hours) || 0, label: label.trim(), color });  
+    const shift: ShiftType = { hours: Number(hours) || 0, label: label.trim(), color };  
+    if (isWorking) { shift.direction = direction; shift.count = Math.max(0, Number(count) || 0); }  
+    onSave(shiftCode, shift);  
     onClose();  
   };  
   
@@ -112,6 +120,7 @@ export function EditShiftDialog({ open, onClose, onSave, shiftCode, shiftData }:
     <DialogShell open={open} onClose={onClose} title={`تعديل الوردية: ${shiftCode}`}>  
       <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الوردية" className={inputClass} />  
       <input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="عدد الساعات" min={0} max={24} className={inputClass} />  
+      {isWorking && <ConditionPicker direction={direction} onDirectionChange={setDirection} count={count} onCountChange={setCount} />}  
       <ColorPicker value={color} onChange={setColor} />  
       <button onClick={handleSave} className="py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all active:scale-[0.97]">  
         حفظ التعديلات  
