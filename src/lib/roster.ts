@@ -7,16 +7,24 @@ export const MONTH_NAMES = [
 
 export const DAY_NAMES = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 
+/** اتجاه التوزيع التلقائي للوردية */
+export type ShiftDirection = "horizontal" | "vertical";
+
 export interface ShiftType {
   hours: number;
   label: string;
   color?: string;
+  // ✨ شروط التوزيع التلقائي لكل وردية
+  // vertical = نفس اليوم لعدة موظفين (count = عدد الموظفين لكل يوم)
+  // horizontal = صف الموظف عبر الأيام (count = عدد الأيام في الشهر لكل موظف)
+  direction?: ShiftDirection;
+  count?: number;
 }
 
 const DEFAULT_SHIFTS: Record<string, ShiftType> = {
-  M: { hours: 6, label: "صباحي", color: "204 94% 44%" },   // أزرق سماوي واضح
-  D: { hours: 12, label: "نهاري", color: "28 96% 48%" },   // برتقالي كهرماني واضح
-  N: { hours: 12, label: "ليلي", color: "256 72% 46%" },   // بنفسجي نيلي غامق واضح
+  M: { hours: 6, label: "صباحي", color: "204 94% 44%", direction: "vertical", count: 1 },   // أزرق سماوي واضح
+  D: { hours: 12, label: "نهاري", color: "28 96% 48%", direction: "vertical", count: 1 },   // برتقالي كهرماني واضح
+  N: { hours: 12, label: "ليلي", color: "256 72% 46%", direction: "vertical", count: 1 },   // بنفسجي نيلي غامق واضح
   R: { hours: 0, label: "راحة", color: "150 72% 38%" },    // أخضر واضح
   OFF: { hours: 0, label: "إجازة", color: "215 16% 47%" }, // رمادي واضح
 };
