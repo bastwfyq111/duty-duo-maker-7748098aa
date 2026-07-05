@@ -170,4 +170,46 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );  
 }  
   
+function ConditionPicker({
+  direction, onDirectionChange, count, onCountChange,
+}: {
+  direction: ShiftDirection;
+  onDirectionChange: (d: ShiftDirection) => void;
+  count: string;
+  onCountChange: (c: string) => void;
+}) {
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 p-2 flex flex-col gap-1.5">
+      <p className="text-[0.7rem] font-semibold text-foreground">شروط التوزيع التلقائي</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => onDirectionChange("vertical")}
+          className={`py-1.5 rounded-md text-[0.7rem] font-semibold border-2 transition-all ${direction === "vertical" ? "border-primary bg-primary/15 text-primary" : "border-foreground/15 text-muted-foreground"}`}
+        >
+          ⬇️ عمودي
+        </button>
+        <button
+          type="button"
+          onClick={() => onDirectionChange("horizontal")}
+          className={`py-1.5 rounded-md text-[0.7rem] font-semibold border-2 transition-all ${direction === "horizontal" ? "border-primary bg-primary/15 text-primary" : "border-foreground/15 text-muted-foreground"}`}
+        >
+          ➡️ أفقي
+        </button>
+      </div>
+      <label className="text-[0.65rem] text-muted-foreground">
+        {direction === "vertical" ? "عدد الموظفين لكل يوم" : "عدد الأيام في الشهر لكل موظف"}
+      </label>
+      <input
+        type="number"
+        min={0}
+        value={count}
+        onChange={e => onCountChange(e.target.value)}
+        placeholder="0"
+        className={`${inputClass} text-center`}
+      />
+    </div>
+  );
+}
+
 export default AddShiftDialog;
