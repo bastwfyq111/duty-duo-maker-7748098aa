@@ -216,7 +216,11 @@ export default function AutoAssignDialog({
                   </div>
                 );
               })}
+              <div className="border-t border-primary/20 pt-1 mt-1 text-[0.65rem] text-muted-foreground">
+                🌙 بعد أي وردية/ورديات N يأتي يوم راحة R تلقائياً، وتُملأ كل الأيام (1 → آخر الشهر) بلا حدّ للساعات أو لأيام العمل.
+              </div>
             </div>
+
           ) : (
             <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
               ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع.
