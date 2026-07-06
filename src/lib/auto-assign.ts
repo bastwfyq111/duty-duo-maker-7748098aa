@@ -508,7 +508,80 @@ function autoAssignByConditions(
       });
     }
   }
+
+  // ✨ رمز الراحة: أول وردية ساعاتها = 0، أو restCode، أو "R"
+  const restCode =
+    c.shiftCodes.find(code => (shifts[code]?.hours ?? 0) === 0) ?? c.restCode ?? "R";
+
+  // ورديات عمل غير ليلية تُستخدم لتعبئة الخانات المتبقية (حتى لا تُنشئ ليلة جديدة
+  // تستوجب راحة بعدها فتُخلّ بالقاعدة)
+  const fillCodes = orderedCodes.filter(code => !isNightCode(code, shifts));
+
+  next.forEach(emp => {
+    // 1) قاعدة إجبارية: بعد نهاية سلسلة ليالٍ N يأتي يوم راحة R.
+    //    لو اليوم السابق ليلة واليوم الحالي ليس ليلة → اجعل اليوم الحالي راحة.
+    for (let day = 2; day <= daysInMonth; day++) {
+      const prevNight =
+        isNightCode(getSlot(emp, day - 1, 1), shifts) ||
+        isNightCode(getSlot(emp, day - 1, 2), shifts);
+      const todayNight =
+        isNightCode(getSlot(emp, day, 1), shifts) ||
+        isNightCode(getSlot(emp, day, 2), shifts);
+      if (prevNight && !todayNight) {
+        emp.attendance[slotKey(day, 1)] = restCode;
+        emp.attendance[slotKey(day, 2)] = "";
+      }
+    }
+
+    // 2) تعبئة كل الأيام: أي خانة فارغة تُملأ بوردية عمل مؤهلة، وإلا راحة.
+    const hoursNow = calcTotalHours(emp.attendance, shifts);
+    let running = hoursNow;
+    for (let day = 1; day <= daysInMonth; day++) {
+      // لا نلمس يوم الراحة الإجباري بعد الليل (اليوم السابق ليلة)
+      const prevNight =
+        day > 1 &&
+        (isNightCode(getSlot(emp, day - 1, 1), shifts) ||
+          isNightCode(getSlot(emp, day - 1, 2), shifts));
+
+      // حاول ملء الخانتين بوردية عمل مؤهلة (غير ليلية بعد ليلة)
+      if (!prevNight) {
+        for (let guard = 0; guard < 4; guard++) {
+          const hasFree = !getSlot(emp, day, 1) || !getSlot(emp, day, 2);
+          if (!hasFree) break;
+
+          // اختر الوردية الأقل تكراراً لهذا الموظف لموازنة الأنواع
+          const counts: Record<string, number> = {};
+          for (let d = 1; d <= daysInMonth; d++) {
+            const a = getSlot(emp, d, 1), b = getSlot(emp, d, 2);
+            if (a) counts[a] = (counts[a] || 0) + 1;
+            if (b) counts[b] = (counts[b] || 0) + 1;
+          }
+          const cands = [...fillCodes].sort(
+            (x, y) => (counts[x] || 0) - (counts[y] || 0)
+          );
+
+          let picked = false;
+          for (const code of cands) {
+            const slot = canAssignConditional(emp, day, code, running, daysInMonth, shifts, c);
+            if (slot === null) continue;
+            emp.attendance[slotKey(day, slot)] = code;
+            running += shifts[code]?.hours ?? 0;
+            picked = true;
+            break;
+          }
+          if (!picked) break;
+        }
+      }
+
+      // لو بقي اليوم فارغاً تماماً → راحة (خلية مدمجة)
+      if (!getSlot(emp, day, 1) && !getSlot(emp, day, 2)) {
+        emp.attendance[slotKey(day, 1)] = restCode;
+        emp.attendance[slotKey(day, 2)] = "";
+      }
+    }
+  });
 }
+
 
 export function autoAssign(
   employees: Employee[],
