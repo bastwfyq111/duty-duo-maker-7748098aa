@@ -242,17 +242,7 @@ export default function AutoAssignDialog({
             </div>
           </div>
 
-          <div>
-            <Label className="text-xs">الحد الأقصى للساعات الشهرية لكل موظف</Label>
-            <Input type="number" className="h-8 text-xs mt-1" value={maxHours}
-              onChange={e => setMaxHours(Number(e.target.value))} />
-          </div>
 
-          <div>
-            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>
-            <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
-              onChange={e => setMaxConsecutive(Number(e.target.value))} />
-          </div>
 
           {/* ✨ تسلسلات آمنة */}
           <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">
