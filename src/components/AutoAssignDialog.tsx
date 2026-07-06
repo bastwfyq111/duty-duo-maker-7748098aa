@@ -134,8 +134,8 @@ export default function AutoAssignDialog({
 
     const constraints: AutoAssignConstraints = {
       shiftCodes: selectedShifts,
-      maxMonthlyHours: maxHours,
-      maxConsecutiveDays: maxConsecutive,
+      maxMonthlyHours: Number.POSITIVE_INFINITY,
+      maxConsecutiveDays: Number.POSITIVE_INFINITY,
       weeklyRestDayOfWeek: null,
       minStaffPerShift: {},
       fairDistribution: true,        // موازنة الساعات دائماً
