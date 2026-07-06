@@ -440,4 +440,56 @@ describe("autoAssign", () => {
       });
     });
   });
+
+  describe("useShiftConditions: rest after night + fill all days", () => {
+    const condShifts: Record<string, ShiftType> = {
+      M: { hours: 6, label: "صباحي", direction: "vertical", count: 1 },
+      N: { hours: 12, label: "ليلي", direction: "vertical", count: 1 },
+      R: { hours: 0, label: "راحة" },
+    };
+
+    const isNight = (c: string) => c === "N";
+
+    it("puts a rest day after every night run and leaves no empty day", () => {
+      const employees: Employee[] = [
+        { name: "A", attendance: {} },
+        { name: "B", attendance: {} },
+        { name: "C", attendance: {} },
+      ];
+      const result = autoAssign(
+        employees,
+        condShifts,
+        2024,
+        0, // January (31 days)
+        makeConstraints({
+          shiftCodes: ["M", "N", "R"],
+          useShiftConditions: true,
+          maxMonthlyHours: Number.POSITIVE_INFINITY,
+          maxConsecutiveDays: Number.POSITIVE_INFINITY,
+          restCode: "R",
+        })
+      );
+
+      result.employees.forEach(emp => {
+        for (let day = 1; day <= 31; day++) {
+          // no fully empty day
+          const s1 = emp.attendance[`${day}-1`] || "";
+          const s2 = emp.attendance[`${day}-2`] || "";
+          expect(s1 !== "" || s2 !== "").toBe(true);
+
+          // rest immediately after a night run ends
+          if (day < 31) {
+            const todayNight = isNight(s1) || isNight(s2);
+            const n1 = emp.attendance[`${day + 1}-1`] || "";
+            const n2 = emp.attendance[`${day + 1}-2`] || "";
+            const nextNight = isNight(n1) || isNight(n2);
+            if (todayNight && !nextNight) {
+              expect(n1).toBe("R");
+            }
+          }
+        }
+      });
+    });
+  });
 });
+
