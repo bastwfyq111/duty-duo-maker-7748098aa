@@ -388,32 +388,25 @@ function canAssignConditional(
   const slot: 1 | 2 | null = !s1 ? 1 : !s2 ? 2 : null;
   if (slot === null) return null;
 
-  const h = shifts[code]?.hours ?? 0;
-  if (hoursNow + h > c.maxMonthlyHours) return null;
+  // ملاحظة: تم حذف قيدي الحد الأقصى للساعات والحد الأقصى لأيام العمل المتتالية.
 
-  const alreadyWorks = dayHasWork(emp, day, shifts);
-  if (!alreadyWorks) {
-    if (consecutiveRunIfWork(emp, day, daysInMonth, shifts) > c.maxConsecutiveDays) return null;
-  }
+  // قاعدة إجبارية: بعد سلسلة ليالٍ N يأتي يوم راحة.
+  // لذلك لا يجوز وضع وردية عمل (غير ليلية) في اليوم التالي مباشرة لليلة —
+  // يُسمح فقط بمواصلة الليالي (N بعد N)، وما عدا ذلك يُترك ليُملأ راحةً.
+  const prevN1 = getSlot(emp, day - 1, 1), prevN2 = getSlot(emp, day - 1, 2);
+  const prevWasNight = isNightCode(prevN1, shifts) || isNightCode(prevN2, shifts);
+  const codeIsWork = (shifts[code]?.hours ?? 0) > 0;
+  if (prevWasNight && codeIsWork && !isNightCode(code, shifts)) return null;
 
   if (c.safeSequences) {
-    const maxNights = c.maxConsecutiveNights ?? 2;
     // لا صباح مباشرة بعد ليلة (اليوم السابق)
-    const prev1 = getSlot(emp, day - 1, 1), prev2 = getSlot(emp, day - 1, 2);
-    const prevNight = isNightCode(prev1, shifts) || isNightCode(prev2, shifts);
-    if (prevNight && isMorningCode(code, shifts)) return null;
+    if (prevWasNight && isMorningCode(code, shifts)) return null;
     // لا صباح في اليوم التالي إن كانت هذه الوردية ليلية
     const nxt1 = getSlot(emp, day + 1, 1), nxt2 = getSlot(emp, day + 1, 2);
     const nextMorning = isMorningCode(nxt1, shifts) || isMorningCode(nxt2, shifts);
     if (isNightCode(code, shifts) && nextMorning) return null;
-    // تحديد الليالي المتتالية
-    if (isNightCode(code, shifts)) {
-      let nights = 1;
-      for (let d = day - 1; d >= 1; d--) { if (isNightCode(getSlot(emp, d, 1), shifts) || isNightCode(getSlot(emp, d, 2), shifts)) nights++; else break; }
-      for (let d = day + 1; d <= daysInMonth; d++) { if (isNightCode(getSlot(emp, d, 1), shifts) || isNightCode(getSlot(emp, d, 2), shifts)) nights++; else break; }
-      if (nights > maxNights) return null;
-    }
   }
+
 
   return slot;
 }
