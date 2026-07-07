@@ -162,14 +162,15 @@ export default function RosterGrid({
                           ) : <span className="text-[0.6rem] truncate max-w-full px-0.5">{singleVal}</span>}  
                         </div>  
                       ) : (  
-                        // عدة خانات منفصلة  
+                        // عدة خانات منفصلة — خط فاصل أسود بين الخانة العلوية (1) والسفلية (2)  
                         <div className="flex flex-col h-[56px]">  
                           {slotValues.map((val, idx) => {  
                             const shift = shiftFor(val);  
+                            const isTopSlot = idx < slotValues.length - 1;  
                             return (  
                               <div  
                                 key={idx}  
-                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all`}  
+                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all ${isTopSlot ? "border-b-2 border-black" : ""}`}  
                                 style={val ? getShiftCellStyle(shift?.color) : undefined}  
                                 onClick={() => handleCellClickWithContext(empIdx, d, idx + 1)}  
                                 onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
