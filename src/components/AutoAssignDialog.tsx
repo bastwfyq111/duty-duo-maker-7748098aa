@@ -30,8 +30,8 @@ export default function AutoAssignDialog({
 
   const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
   const [useShiftConditions, setUseShiftConditions] = useState(true);
-  // ملاحظة: تم حذف حدّي الساعات وأيام العمل المتتالية بناءً على طلب المستخدم
-
+  const [maxHours, setMaxHours] = useState(180);
+  const [maxConsecutive, setMaxConsecutive] = useState(6);
   const [override, setOverride] = useState(false);
   const [safeSequences, setSafeSequences] = useState(true);
   const [maxConsecutiveNights, setMaxConsecutiveNights] = useState(2);
@@ -134,8 +134,8 @@ export default function AutoAssignDialog({
 
     const constraints: AutoAssignConstraints = {
       shiftCodes: selectedShifts,
-      maxMonthlyHours: Number.POSITIVE_INFINITY,
-      maxConsecutiveDays: Number.POSITIVE_INFINITY,
+      maxMonthlyHours: maxHours,
+      maxConsecutiveDays: maxConsecutive,
       weeklyRestDayOfWeek: null,
       minStaffPerShift: {},
       fairDistribution: true,        // موازنة الساعات دائماً
@@ -216,11 +216,7 @@ export default function AutoAssignDialog({
                   </div>
                 );
               })}
-              <div className="border-t border-primary/20 pt-1 mt-1 text-[0.65rem] text-muted-foreground">
-                🌙 بعد أي وردية/ورديات N يأتي يوم راحة R تلقائياً، وتُملأ كل الأيام (1 → آخر الشهر) بلا حدّ للساعات أو لأيام العمل.
-              </div>
             </div>
-
           ) : (
             <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
               ↔️ توزيع أفقي عشوائي: يملأ صف كل موظف عشوائياً في الخانتين مع موازنة إجمالي الساعات بين الجميع.
@@ -246,7 +242,17 @@ export default function AutoAssignDialog({
             </div>
           </div>
 
+          <div>
+            <Label className="text-xs">الحد الأقصى للساعات الشهرية لكل موظف</Label>
+            <Input type="number" className="h-8 text-xs mt-1" value={maxHours}
+              onChange={e => setMaxHours(Number(e.target.value))} />
+          </div>
 
+          <div>
+            <Label className="text-xs">الحد الأقصى لأيام العمل المتتالية</Label>
+            <Input type="number" className="h-8 text-xs mt-1" value={maxConsecutive}
+              onChange={e => setMaxConsecutive(Number(e.target.value))} />
+          </div>
 
           {/* ✨ تسلسلات آمنة */}
           <label className="flex items-center gap-2 text-xs cursor-pointer bg-accent/10 border border-accent/30 rounded p-2">
