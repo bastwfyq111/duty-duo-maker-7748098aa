@@ -1,7 +1,7 @@
 import type { Employee } from "@/hooks/useRosterData";  
 import { type ShiftType, getDaysInMonth, calcTotalHours } from "@/lib/roster";  
   
-export interface AutoAssignConstraints {  
+export interface AutoAssignConstraints { 
   shiftCodes: string[];                       // shifts to distribute  
   maxMonthlyHours: number;                    // per-employee cap  
   maxConsecutiveDays: number;                 // max consecutive working days  
