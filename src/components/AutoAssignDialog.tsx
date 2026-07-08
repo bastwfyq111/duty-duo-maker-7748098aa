@@ -18,7 +18,6 @@ interface AutoAssignDialogProps {
   year: number;
   onApply: (next: Employee[]) => void;
 }
-
 export default function AutoAssignDialog({
   open, onClose, employees, shifts, month, year, onApply,
 }: AutoAssignDialogProps) {
