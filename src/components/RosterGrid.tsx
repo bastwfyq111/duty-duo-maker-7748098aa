@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { getDaysArray, getDayName, isFriday, calcTotalHours, type ShiftType } from "@/lib/roster";  
 import { getShiftCellStyle } from "@/lib/color-utils";  
 import type { Employee } from "@/hooks/useRosterData";  
-  
+ 
 interface RosterGridProps {  
   employees: Employee[];  
   shifts: Record<string, ShiftType>;  
@@ -15,18 +15,18 @@ interface RosterGridProps {
   onMergeCell?: (empIdx: number, day: number) => void;  
   onSplitCell?: (empIdx: number, day: number) => void;  
 }  
-  
+ 
 export default function RosterGrid({   
   employees: propEmployees, shifts: propShifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell   
 }: RosterGridProps) {  
   const days = useMemo(() => getDaysArray(year, month), [year, month]);  
   const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());  
   const [contextMenu, setContextMenu] = useState<{ empIdx: number; day: number; x: number; y: number } | null>(null);  
-  
+ 
   const isMerged = (empIdx: number, day: number): boolean => {  
     return mergedCells.has(`${empIdx}-${day}`);  
   };  
-  
+ 
   const handleMerge = (empIdx: number, day: number) => {  
     const key = `${empIdx}-${day}`;  
     const newMerged = new Set(mergedCells);  
@@ -39,7 +39,7 @@ export default function RosterGrid({
     onMergeCell?.(empIdx, day);  
     setContextMenu(null);  
   };  
-  
+ 
   const handleSplit = (empIdx: number, day: number) => {  
     const key = `${empIdx}-${day}`;  
     const newMerged = new Set(mergedCells);  
@@ -48,12 +48,12 @@ export default function RosterGrid({
     onSplitCell?.(empIdx, day);  
     setContextMenu(null);  
   };  
-  
+ 
   const handleContextMenu = (e: React.MouseEvent, empIdx: number, day: number) => {  
     e.preventDefault();  
     setContextMenu({ empIdx, day, x: e.clientX, y: e.clientY });  
   };  
-  
+ 
   const handleCellClickWithContext = (empIdx: number, day: number, slot?: number) => {  
     if (mergedCells.has(`${empIdx}-${day}`) && slot) {  
       // عند دمج الخلايا، استخدم slot 1 دائماً  
@@ -62,7 +62,7 @@ export default function RosterGrid({
       onCellClick(empIdx, day, slot);  
     }  
   };  
-  
+ 
   return (  
     <div dir="rtl" className="table-wrapper overflow-x-auto -webkit-overflow-scrolling-touch mt-4 rounded-xl border border-border bg-card">  
       <table id="rosterTable" className="roster-table" dir="rtl">  
@@ -121,22 +121,22 @@ export default function RosterGrid({
                 {days.map(d => {  
                   const we = isFriday(year, month, d);  
                   const merged = isMerged(empIdx, d);  
-  
-                  // نقرأ كل خانة (slot) بناءً على slotsPerDay  
+ 
+                  // نقرأ كل خانة (slot) بناء على slotsPerDay  
                   const slotValues: string[] = [];  
                   for (let s = 1; s <= slotsPerDay; s++) {  
                     const key = `${d}-${s}`;  
                     const val = emp.attendance[key] || (s === 1 ? emp.attendance[d] || "" : "") || "";  
                     slotValues.push(val);  
                   }  
-  
+ 
                   const shiftFor = (val: string) => val ? propShifts[val] : undefined;  
-  
+ 
                   // دمج تلقائي: إذا كانت خانة واحدة فقط ممتلئة (أو لا شيء) نعرضها كخلية واحدة  
                   const filledVals = slotValues.filter(v => v);  
                   const showSingle = merged || filledVals.length <= 1;  
                   const singleVal = filledVals[0] ?? "";  
-  
+ 
                   return (  
                     <td  
                       key={d}  
@@ -170,7 +170,7 @@ export default function RosterGrid({
                             return (  
                               <div  
                                 key={idx}  
-                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all ${isTopSlot ? "border-b-2 border-black" : ""}`}  
+                                className={`flex-1 min-h-[${Math.max(20, Math.floor(56 / slotsPerDay))}px] overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all`}  
                                 style={val ? getShiftCellStyle(shift?.color) : undefined}  
                                 onClick={() => handleCellClickWithContext(empIdx, d, idx + 1)}  
                                 onContextMenu={(e) => handleContextMenu(e, empIdx, d)}  
@@ -205,7 +205,7 @@ export default function RosterGrid({
           )}  
         </tbody>  
       </table>  
-  
+ 
       {/* قائمة السياق (Context Menu) */}  
       {contextMenu && (  
         <div  
@@ -235,4 +235,4 @@ export default function RosterGrid({
       )}  
     </div>  
   );  
-}
+}  
