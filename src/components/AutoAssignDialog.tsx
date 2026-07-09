@@ -29,6 +29,18 @@ export default function AutoAssignDialog({
 
   const [selectedShifts, setSelectedShifts] = useState<string[]>(workingShiftCodes);
   const [useShiftConditions, setUseShiftConditions] = useState(true);
+
+  // ✨ شروط كل وردية (اتجاه + عدد) تُدخل مباشرة هنا بدل الرجوع لنافذة تعديل الوردية
+  const [shiftConditions, setShiftConditions] = useState<
+    Record<string, { direction: "vertical" | "horizontal"; count: number }>
+  >({});
+
+  const setShiftCondition = (
+    code: string,
+    value: { direction: "vertical" | "horizontal"; count: number }
+  ) => {
+    setShiftConditions(prev => ({ ...prev, [code]: value }));
+  };
   const [maxHours, setMaxHours] = useState(180);
   const [maxConsecutive, setMaxConsecutive] = useState(6);
   const [override, setOverride] = useState(false);
@@ -38,6 +50,23 @@ export default function AutoAssignDialog({
   // keep selected shifts in sync if shift types change (avoids stale initial value)
   useEffect(() => {
     setSelectedShifts(workingShiftCodes);
+  }, [workingShiftCodes]);
+
+  // ✨ تهيئة شروط كل وردية جديدة بقيم افتراضية (أو القيم المحفوظة سابقاً في الوردية نفسها إن وُجدت)
+  useEffect(() => {
+    setShiftConditions(prev => {
+      const next = { ...prev };
+      workingShiftCodes.forEach(code => {
+        if (!next[code]) {
+          next[code] = {
+            direction: (shifts[code]?.direction as "vertical" | "horizontal") ?? "vertical",
+            count: shifts[code]?.count ?? 0,
+          };
+        }
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workingShiftCodes]);
 
   // Ordering / fill behavior state (logic already existed — now wired to a visible UI)
@@ -131,6 +160,21 @@ export default function AutoAssignDialog({
       ? Object.fromEntries(Object.entries(quotas).filter(([, v]) => v > 0))
       : undefined;
 
+    // ✨ شروط كل وردية (اتجاه + عدد) كما أُدخلت مباشرة في هذه النافذة
+    const shiftConditionsForAssign: Record<string, { direction: "vertical" | "horizontal"; count: number }> = {};
+    if (useShiftConditions) {
+      selectedShifts.forEach(code => {
+        const cond = shiftConditions[code];
+        if (cond) shiftConditionsForAssign[code] = cond;
+      });
+      const missing = workingShiftCodes.filter(
+        code => selectedShifts.includes(code) && !(shiftConditionsForAssign[code]?.count > 0)
+      );
+      if (missing.length > 0) {
+        localWarnings.push(`لا يوجد عدد محدد للورديات: ${missing.join(", ")} — لن تُوزَّع هذه الورديات حسب الشروط.`);
+      }
+    }
+
     const constraints: AutoAssignConstraints = {
       shiftCodes: selectedShifts,
       maxMonthlyHours: maxHours,
@@ -143,6 +187,7 @@ export default function AutoAssignDialog({
       maxConsecutiveNights,
       randomHorizontal: !useShiftConditions, // العشوائي فقط إذا لم يُفعّل وضع الشروط
       useShiftConditions,                    // ✨ التوزيع حسب شروط كل وردية
+      shiftConditions: shiftConditionsForAssign, // ✨ القيم المُدخلة مباشرة في هذه النافذة
       ordering,
       fillAllDays,
       strictPriority: useCustomOrdering ? strictPriority : false,
@@ -196,25 +241,58 @@ export default function AutoAssignDialog({
           </label>
 
           {useShiftConditions ? (
-            <div className="bg-primary/5 border border-primary/20 rounded p-2 text-[0.7rem] space-y-1">
-              <div className="font-semibold">شروط الورديات الحالية (بالترتيب):</div>
+            <div className="bg-primary/5 border border-primary/20 rounded p-2 text-[0.7rem] space-y-2">
+              <div className="font-semibold">شروط كل وردية (بالترتيب):</div>
               {workingShiftCodes.filter(c => selectedShifts.includes(c)).map(code => {
-                const st = shifts[code];
-                const cnt = st?.count ?? 0;
-                const dir = st?.direction ?? "vertical";
+                const cond = shiftConditions[code] ?? { direction: "vertical" as const, count: 0 };
                 return (
-                  <div key={code} className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-semibold">{code}</span>
-                    {cnt > 0 ? (
-                      <span className="text-muted-foreground">
-                        {dir === "vertical" ? `⬇️ عمودي · ${cnt} موظف/يوم` : `➡️ أفقي · ${cnt} يوم/شهر`}
-                      </span>
-                    ) : (
-                      <span className="text-amber-600">لا يوجد شرط — عدّل الوردية وحدد الاتجاه والعدد</span>
-                    )}
+                  <div key={code} className="flex items-center gap-2">
+                    <span className="font-mono font-semibold w-7 shrink-0">{code}</span>
+
+                    <div className="flex rounded overflow-hidden border border-input shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShiftCondition(code, { ...cond, direction: "vertical" })}
+                        className={`px-2 py-1 text-[0.65rem] transition-colors ${
+                          cond.direction === "vertical"
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        ⬇️ عمودي
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShiftCondition(code, { ...cond, direction: "horizontal" })}
+                        className={`px-2 py-1 text-[0.65rem] transition-colors ${
+                          cond.direction === "horizontal"
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        ➡️ أفقي
+                      </button>
+                    </div>
+
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-7 text-xs w-16"
+                      value={cond.count || ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        setShiftCondition(code, { ...cond, count: Number(e.target.value) || 0 })
+                      }
+                    />
+                    <span className="text-muted-foreground shrink-0">
+                      {cond.direction === "vertical" ? "موظف/يوم" : "يوم/شهر"}
+                    </span>
                   </div>
                 );
               })}
+              <p className="text-[0.65rem] text-muted-foreground">
+                عمودي: عدد الموظفين المطلوبين على هذه الوردية في كل يوم · أفقي: عدد الأيام المطلوبة لكل موظف خلال الشهر
+              </p>
             </div>
           ) : (
             <p className="text-[0.7rem] text-muted-foreground bg-secondary/20 border border-secondary/40 rounded p-2">
