@@ -31,6 +31,8 @@ export interface AutoAssignConstraints {
   useShiftQuotas?: boolean;
   // ✨ التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب إضافة الورديات
   useShiftConditions?: boolean;
+  // ✨ شروط كل وردية تُدخل مباشرة من نافذة التوزيع (لها الأولوية على شروط الوردية نفسها)
+  shiftConditions?: Record<string, { direction?: "vertical" | "horizontal"; count?: number }>;
 }
 
 /** Detect night-shift code by convention (code starts with N or label mentions "ليل"). */
@@ -74,6 +76,38 @@ function slotKey(day: number, slot: 1 | 2): string {
 /** Helper: get assigned shift for a given slot */
 function getSlot(emp: Employee, day: number, slot: 1 | 2): string {
   return emp.attendance[slotKey(day, slot)] || "";
+}
+
+/** ✨ وردية 12 ساعة أو وردية الراحة R تشغل اليوم كاملاً — لا يجوز وجود وردية ثانية معها بنفس اليوم */
+function isFullDayCode(code: string, shifts: Record<string, ShiftType>): boolean {
+  if (!code) return false;
+  if ((shifts[code]?.hours ?? 0) === 12) return true;
+  return code.trim().toUpperCase() === "R";
+}
+
+/**
+ * ✨ يمرّ على كل الموظفين وكل الأيام: لو احتوت الخلية على وردية 12 ساعة أو R
+ * (في أي من الخانتين)، تُفرَّغ الخانة الثانية مباشرة فتُعرض الخليتان مدمجتين كخلية واحدة.
+ */
+function enforceFullDayMerge(
+  employees: Employee[],
+  shifts: Record<string, ShiftType>,
+  daysInMonth: number
+): void {
+  employees.forEach(emp => {
+    for (let day = 1; day <= daysInMonth; day++) {
+      const k1 = slotKey(day, 1), k2 = slotKey(day, 2);
+      const v1 = emp.attendance[k1] || "";
+      const v2 = emp.attendance[k2] || "";
+      const full1 = isFullDayCode(v1, shifts);
+      const full2 = isFullDayCode(v2, shifts);
+      if (full1 || full2) {
+        // نُبقي الوردية كاملة اليوم في الخانة الأولى ونُفرغ الثانية (دمج مباشر)
+        emp.attendance[k1] = full1 ? v1 : v2;
+        emp.attendance[k2] = "";
+      }
+    }
+  });
 }
 
 /** Helper: check if employee has any working hours on a given day */
@@ -430,20 +464,29 @@ function autoAssignByConditions(
 ): void {
   const hoursPerEmp = next.map(emp => calcTotalHours(emp.attendance, shifts));
 
+  // ✨ شروط كل وردية: الأولوية للقيم المُدخلة مباشرة في نافذة التوزيع، وإلا نرجع لشروط الوردية نفسها
+  const conditionFor = (code: string): { count: number; direction: "vertical" | "horizontal" } => {
+    const override = c.shiftConditions?.[code];
+    const st = shifts[code];
+    return {
+      count: override?.count ?? st?.count ?? 0,
+      direction: override?.direction ?? st?.direction ?? "vertical",
+    };
+  };
+
   // الورديات بترتيب إضافتها (كما وردت في shiftCodes) — ورديات العمل فقط
   const orderedCodes = c.shiftCodes.filter(code => (shifts[code]?.hours ?? 0) > 0);
 
-  const configured = orderedCodes.filter(code => (shifts[code]?.count ?? 0) > 0);
+  const configured = orderedCodes.filter(code => conditionFor(code).count > 0);
   if (configured.length === 0) {
-    warnings.push("لا توجد ورديات لها شروط توزيع (اتجاه + عدد). عدّل الورديات وحدد الاتجاه والعدد أولاً.");
+    warnings.push("لا توجد ورديات لها شروط توزيع (اتجاه + عدد). حدد الاتجاه والعدد لكل وردية في نافذة التوزيع أولاً.");
     return;
   }
 
   for (const code of orderedCodes) {
     const st = shifts[code];
-    const count = st?.count ?? 0;
+    const { count, direction: dir } = conditionFor(code);
     if (count <= 0) continue;
-    const dir = st?.direction ?? "vertical";
 
     if (dir === "vertical") {
       // لكل يوم: نحتاج count موظفين على هذه الوردية
@@ -608,6 +651,7 @@ export function autoAssign(
   // ✨ فرع التوزيع حسب شروط كل وردية (اتجاه + عدد) بترتيب الإضافة
   if (c.useShiftConditions) {
     autoAssignByConditions(next, shifts, year, month, daysInMonth, c, warnings);
+    enforceFullDayMerge(next, shifts, daysInMonth);
     const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
     const stats: AutoAssignStats = {
       maxHours: finalHours.length ? Math.max(...finalHours) : 0,
@@ -621,6 +665,7 @@ export function autoAssign(
   // ✨ فرع التوزيع الأفقي العشوائي: يملأ الصفوف عشوائياً مع موازنة الساعات ثم يعود مبكراً
   if (c.randomHorizontal) {
     autoAssignRandomHorizontal(next, shifts, year, month, daysInMonth, c, warnings);
+    enforceFullDayMerge(next, shifts, daysInMonth);
     const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
     const stats: AutoAssignStats = {
       maxHours: finalHours.length ? Math.max(...finalHours) : 0,
@@ -793,6 +838,9 @@ export function autoAssign(
       });
     }
   }
+
+  // ✨ دمج مباشر: أي خلية فيها 12 ساعة أو R تُفرَّغ خانتها الثانية
+  enforceFullDayMerge(next, shifts, daysInMonth);
 
   // Compute fairness stats over final hours
   const finalHours = next.map(emp => calcTotalHours(emp.attendance, shifts));
