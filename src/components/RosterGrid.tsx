@@ -16,6 +16,12 @@ interface RosterGridProps {
   onSplitCell?: (empIdx: number, day: number) => void;  
 }  
  
+const isFullDayShift = (val: string, shifts: Record<string, ShiftType>): boolean => {
+  if (!val) return false;
+  if ((shifts[val]?.hours ?? 0) === 12) return true;
+  return val.trim().toUpperCase() === "R";
+};
+
 export default function RosterGrid({   
   employees: propEmployees, shifts: propShifts, month, year, slotsPerDay = 2, onCellClick, onRemoveEmployee, onSwapEmployee, onMergeCell, onSplitCell   
 }: RosterGridProps) {  
@@ -132,10 +138,13 @@ export default function RosterGrid({
  
                   const shiftFor = (val: string) => val ? propShifts[val] : undefined;  
  
-                  // دمج تلقائي: إذا كانت خانة واحدة فقط ممتلئة (أو لا شيء) نعرضها كخلية واحدة  
+                  // دمج تلقائي: خلية واحدة ممتلئة، أو الدمج اليدوي، أو وردية 12 ساعة/R تشغل اليوم كاملاً  
                   const filledVals = slotValues.filter(v => v);  
-                  const showSingle = merged || filledVals.length <= 1;  
-                  const singleVal = filledVals[0] ?? "";  
+                  const forceFullDayMerge = slotValues.some(v => isFullDayShift(v, propShifts));  
+                  const showSingle = merged || filledVals.length <= 1 || forceFullDayMerge;  
+                  const singleVal = forceFullDayMerge  
+                    ? (slotValues.find(v => isFullDayShift(v, propShifts)) ?? filledVals[0] ?? "")  
+                    : (filledVals[0] ?? "");  
  
                   return (  
                     <td  
